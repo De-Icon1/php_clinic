@@ -6,6 +6,148 @@
   authorize();
   $aid=$_SESSION['doc_id'];
    $doc_number = $_SESSION['doc_number'];
+  // Determine nurse's assigned campus/location (if available).
+  // Older schema may not have `campus_id` on `his_docs`. Prefer session-based `working_location`.
+  $campus_id = null;
+  if (isset($_SESSION['working_location']) && !empty($_SESSION['working_location'])) {
+      $working_location = $_SESSION['working_location'];
+      $campusStmt = $mysqli->prepare("SELECT id FROM campus_locations WHERE name = ? LIMIT 1");
+      if ($campusStmt) {
+          $campusStmt->bind_param('s', $working_location);
+          $campusStmt->execute();
+          $cres = $campusStmt->get_result();
+          if ($crow = $cres->fetch_assoc()) {
+              $campus_id = $crow['id'];
+          }
+      }
+  }
+
+  // If the DB schema has `his_docs.campus_id`, prefer that for the logged-in doctor/nurse
+  $col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='his_docs' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
+  if ($col_exists) {
+      $docCampusStmt = $mysqli->prepare("SELECT campus_id FROM his_docs WHERE doc_id = ? AND doc_number = ? LIMIT 1");
+      if ($docCampusStmt) {
+          $docCampusStmt->bind_param('is', $aid, $doc_number);
+          $docCampusStmt->execute();
+          $dres = $docCampusStmt->get_result();
+          if ($drow = $dres->fetch_assoc()) {
+              if (!empty($drow['campus_id'])) $campus_id = $drow['campus_id'];
+          }
+      }
+  }
+
+  // Handle picking a consumable by stock id (location-specific)
+  $picked_item = null;
+  if (isset($_POST['pick_consumable'])) {
+      $stock_id = (int) ($_POST['stock_id'] ?? 0);
+      $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
+      if ($pst) {
+          $pst->bind_param('i', $stock_id);
+          $pst->execute();
+          $pres = $pst->get_result();
+          if ($row = $pres->fetch_assoc()) {
+              if ($campus_id && $row['campus_id'] != $campus_id) {
+                  $err = "Selected stock item does not belong to your location.";
+              } else {
+                  $picked_item = $row;
+              }
+          } else {
+              $err = "Consumable stock ID not found.";
+          }
+      }
+  }
+
+  // AJAX: pick consumable (returns JSON)
+  if (isset($_POST['ajax']) && $_POST['ajax'] === 'pick') {
+      header('Content-Type: application/json');
+      $stock_id = (int) ($_POST['stock_id'] ?? 0);
+      $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
+      if ($pst) {
+          $pst->bind_param('i', $stock_id);
+          $pst->execute();
+          $pres = $pst->get_result();
+          if ($row = $pres->fetch_assoc()) {
+              if ($campus_id && $row['campus_id'] != $campus_id) {
+                  echo json_encode(['success' => false, 'error' => 'Selected stock item does not belong to your location.']);
+              } else {
+                  echo json_encode(['success' => true, 'item' => $row]);
+              }
+          } else {
+              echo json_encode(['success' => false, 'error' => 'Consumable stock ID not found.']);
+          }
+      } else {
+          echo json_encode(['success' => false, 'error' => 'Server error preparing statement.']);
+      }
+      exit();
+  }
+
+  // Handle issuing picked stock (reduce quantity)
+  if (isset($_POST['issue_stock'])) {
+      $stock_id = (int) ($_POST['stock_id'] ?? 0);
+      $issue_qty = (int) ($_POST['issue_qty'] ?? 0);
+      if ($issue_qty <= 0) {
+          $err = "Enter a valid quantity to issue.";
+      } else {
+          $gst = $mysqli->prepare("SELECT quantity, campus_id FROM nurse_consumable_stock WHERE id = ? LIMIT 1");
+          $gst->bind_param('i', $stock_id);
+          $gst->execute();
+          $gres = $gst->get_result();
+          if ($g = $gres->fetch_assoc()) {
+              if ($campus_id && $g['campus_id'] != $campus_id) {
+                  $err = "You cannot issue stock from another location.";
+              } elseif ($g['quantity'] < $issue_qty) {
+                  $err = "Not enough stock to issue.";
+              } else {
+                  $upd = $mysqli->prepare("UPDATE nurse_consumable_stock SET quantity = quantity - ? WHERE id = ?");
+                  $upd->bind_param('ii', $issue_qty, $stock_id);
+                  $upd->execute();
+                  if ($upd) $success = "Issued $issue_qty item(s) successfully.";
+                  // Refresh picked item for display
+                  $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
+                  $pst->bind_param('i', $stock_id);
+                  $pst->execute();
+                  $picked_item = $pst->get_result()->fetch_assoc();
+              }
+          } else {
+              $err = "Stock record not found.";
+          }
+      }
+  }
+
+  // AJAX: issue stock (returns JSON)
+  if (isset($_POST['ajax']) && $_POST['ajax'] === 'issue') {
+      header('Content-Type: application/json');
+      $stock_id = (int) ($_POST['stock_id'] ?? 0);
+      $issue_qty = (int) ($_POST['issue_qty'] ?? 0);
+      if ($issue_qty <= 0) {
+          echo json_encode(['success' => false, 'error' => 'Enter a valid quantity to issue.']); exit();
+      }
+      $gst = $mysqli->prepare("SELECT quantity, campus_id FROM nurse_consumable_stock WHERE id = ? LIMIT 1");
+      if (!$gst) { echo json_encode(['success'=>false,'error'=>'Server error']); exit(); }
+      $gst->bind_param('i', $stock_id);
+      $gst->execute();
+      $gres = $gst->get_result();
+      if ($g = $gres->fetch_assoc()) {
+          if ($campus_id && $g['campus_id'] != $campus_id) {
+              echo json_encode(['success' => false, 'error' => 'You cannot issue stock from another location.']); exit();
+          } elseif ($g['quantity'] < $issue_qty) {
+              echo json_encode(['success' => false, 'error' => 'Not enough stock to issue.']); exit();
+          } else {
+              $upd = $mysqli->prepare("UPDATE nurse_consumable_stock SET quantity = quantity - ? WHERE id = ?");
+              $upd->bind_param('ii', $issue_qty, $stock_id);
+              $upd->execute();
+              // fetch new quantity
+              $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
+              $pst->bind_param('i', $stock_id);
+              $pst->execute();
+              $new = $pst->get_result()->fetch_assoc();
+              echo json_encode(['success' => true, 'message' => "Issued $issue_qty item(s) successfully.", 'item' => $new]);
+              exit();
+          }
+      } else {
+          echo json_encode(['success' => false, 'error' => 'Stock record not found.']); exit();
+      }
+  }
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -19,7 +161,7 @@
         <div id="wrapper">
 
             <!-- Topbar Start -->
-            <?php include('assets/inc/nav_r.php');?>
+            <?php include('assets/inc/nav_n.php');?>
             <!-- end Topbar -->
 
             <!-- ========== Left Sidebar Start ========== -->
@@ -46,7 +188,36 @@
                             </div>
                         </div>     
                         <!-- end page title --> 
-                        
+
+                        <?php if(isset($err)) echo "<div class='alert alert-danger'>$err</div>"; ?>
+                        <?php if(isset($success)) echo "<div class='alert alert-success'>$success</div>"; ?>
+
+                        <?php if(!empty($picked_item)) { ?>
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-info text-white">
+                                        <h5 class="card-title mb-0">Picked Consumable</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <p><strong>Stock ID:</strong> <?php echo htmlspecialchars($picked_item['stock_id']); ?></p>
+                                        <p><strong>Consumable:</strong> <?php echo htmlspecialchars($picked_item['name']); ?> (<?php echo htmlspecialchars($picked_item['category']); ?>)</p>
+                                        <p><strong>Available Quantity:</strong> <?php echo (int)$picked_item['quantity']; ?></p>
+
+                                        <form method="post" class="row g-2">
+                                            <div class="col-md-4">
+                                                <input type="hidden" name="stock_id" value="<?php echo (int)$picked_item['stock_id']; ?>">
+                                                <input type="number" name="issue_qty" min="1" class="form-control" placeholder="Qty to issue" required>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <button type="submit" name="issue_stock" class="btn btn-warning">Issue</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php } ?>
 
                         <div class="row">
                             <!--Start OutPatients-->
@@ -451,6 +622,62 @@
 
         <!-- App js-->
         <script src="assets/js/app.min.js"></script>
+        <script>
+        jQuery(function($){
+            // Intercept pick consumable form in sidebar to call AJAX
+            $(document).on('submit', '.pick-consumable-form', function(e){
+                e.preventDefault();
+                var $form = $(this);
+                var stock_id = $form.find('input[name="stock_id"]').val();
+                var $btn = $form.find('button[type="submit"]');
+                $btn.prop('disabled', true).text('Picking...');
+                $.post('nursing_dashboard.php', { ajax: 'pick', stock_id: stock_id }, function(resp){
+                    $btn.prop('disabled', false).text('Pick Consumable');
+                    if (!resp) { showToast('danger', 'Server error'); return; }
+                    if (!resp.success) { showToast('danger', resp.error || 'Error'); return; }
+                    // Build picked item card HTML
+                    var it = resp.item;
+                    var html = '';
+                    html += '<div class="row mb-3"><div class="col-12"><div class="card"><div class="card-header bg-info text-white"><h5 class="card-title mb-0">Picked Consumable</h5></div><div class="card-body">';
+                    html += '<p><strong>Stock ID:</strong> '+it.stock_id+'</p>';
+                    html += '<p><strong>Consumable:</strong> '+it.name+' ('+it.category+')</p>';
+                    html += '<p><strong>Available Quantity:</strong> '+it.quantity+'</p>';
+                    html += '<form class="row g-2 issue-stock-form">';
+                    html += '<div class="col-md-4"><input type="hidden" name="stock_id" value="'+it.stock_id+'"><input type="number" name="issue_qty" min="1" class="form-control" placeholder="Qty to issue" required></div>';
+                    html += '<div class="col-md-2"><button type="submit" class="btn btn-warning">Issue</button></div>';
+                    html += '</form>';
+                    html += '</div></div></div></div>';
+                    // Replace existing picked card or insert before the widgets
+                    var $existing = $('.picked-consumable-wrapper');
+                    if ($existing.length) { $existing.html(html); }
+                    else { $('.container-fluid .row').first().before('<div class="picked-consumable-wrapper">'+html+'</div>'); }
+                }, 'json').fail(function(){ $btn.prop('disabled', false).text('Pick Consumable'); showToast('danger', 'Request failed'); });
+            });
+
+            // Delegate issue form submit (AJAX)
+            $(document).on('submit', '.issue-stock-form', function(e){
+                e.preventDefault();
+                var $form = $(this);
+                var stock_id = $form.find('input[name="stock_id"]').val();
+                var issue_qty = $form.find('input[name="issue_qty"]').val();
+                var $btn = $form.find('button[type="submit"]');
+                $btn.prop('disabled', true).text('Issuing...');
+                $.post('nursing_dashboard.php', { ajax: 'issue', stock_id: stock_id, issue_qty: issue_qty }, function(resp){
+                    $btn.prop('disabled', false).text('Issue');
+                    if (!resp) { showToast('danger', 'Server error'); return; }
+                    if (!resp.success) { showToast('danger', resp.error || 'Error'); return; }
+                    // Update displayed quantity
+                    var it = resp.item;
+                    var $wrapper = $('.picked-consumable-wrapper');
+                    if ($wrapper.length) {
+                        $wrapper.find('.card-body').html('<p><strong>Stock ID:</strong> '+it.stock_id+'</p><p><strong>Consumable:</strong> '+it.name+' ('+it.category+')</p><p><strong>Available Quantity:</strong> '+it.quantity+'</p>'+
+                            '<form class="row g-2 issue-stock-form"><div class="col-md-4"><input type="hidden" name="stock_id" value="'+it.stock_id+'"><input type="number" name="issue_qty" min="1" class="form-control" placeholder="Qty to issue" required></div><div class="col-md-2"><button type="submit" class="btn btn-warning">Issue</button></div></form>');
+                    }
+                    showToast('success', resp.message || 'Issued successfully');
+                }, 'json').fail(function(){ $btn.prop('disabled', false).text('Issue'); showToast('danger', 'Request failed'); });
+            });
+        });
+        </script>
         
     </body>
 
