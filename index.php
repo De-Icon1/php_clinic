@@ -192,11 +192,23 @@ function storeopeningstock($date,$mysqli){
 }
 
 function getcampusid($campusname,$mysqli){
-    $sql="SELECT * FROM campus_locations where name=$campusname"; 
-   $result = mysqli_query($mysqli,$sql);
-    $num=mysqli_num_rows($result);
-    $reply = mysqli_fetch_array($result);
-    return $id;
+    // If the posted value is numeric, assume it's already the campus id.
+    if (is_numeric($campusname)) {
+        return (int) $campusname;
+    }
+
+    // Otherwise look up campus id by name using a prepared statement.
+    $stmt = $mysqli->prepare("SELECT id FROM campus_locations WHERE name = ? LIMIT 1");
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('s', $campusname);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($row = $res->fetch_assoc()) {
+        return (int) $row['id'];
+    }
+    return null;
 }
 ?>
 <!--End Login-->
