@@ -9,6 +9,8 @@
 
                             <li class="menu-title"><h5>Admin Navigation</h5></li>
 
+                            <?php /* Campus selector moved to report pages (not shown in sidebar) */ ?>
+
                             <li>
                                 <a href="admin_dashboard.php">
                                     <img src="./assets/img/home.png"></i>
@@ -43,7 +45,13 @@
                                         <a href="./lab_consumables.php">Setup Lab consumables</a>
                                     </li>
                                     <li>
+                                        <a href="setup_radiology.php">Setup Radiology </a>
+                                    </li>
+                                    <li>
                                         <a href="./nurse_consumables.php">Setup Nurse consumables</a>
+                                    </li>
+                                    <li>
+                                        <a href="./scan_consumables.php">Setup Scan consumables</a>
                                     </li>
                                     <li>
                                         <a href="./setup_scan.php">Setup Scan</a>
@@ -59,12 +67,18 @@
                                     <span class="menu-arrow"></span>
                                 </a>
                                 <ul class="nav-second-level" aria-expanded="false">
+                                    <li>
+                                        <a href="transfer_history.php">Transfer History</a>
+                                    </li>
  
                                     <li>
                                         <a href="drug_operations.php">Drug Operations</a>
                                     </li>
                                      <li>
                                         <a href="dispense_pharmacy.php">Drugs To Phamacy</a>
+                                    </li>
+                                    <li>
+                                        <a href="transfer_drug_nursing.php">Transfer to Nursing </a>
                                     </li>
                                     
                                     
@@ -80,10 +94,10 @@
                                 <ul class="nav-second-level" aria-expanded="false">
  
                                      <li>
-                                        <a href="#">Total Registered Patient</a>
+                                        <a href="total_registered.php">Total Registered Patient</a>
                                     </li>
                                      <li>
-                                        <a href="">Current Admitted Patient</a>
+                                        <a href="current_admitted.php">Current Admitted Patient</a>
                                     </li>
                                      <li>
                                         <a href="visitdate.php">Todays Visit Report</a>

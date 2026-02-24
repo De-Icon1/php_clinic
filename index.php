@@ -8,6 +8,7 @@
         pharmacyopeningstock($date,$mysqli);
         storeopeningstock($date,$mysqli);
 
+        $campusname=$_POST['location'];
          $doc_number = $_POST['ad_id'];
          $st='ACTIVE';
         //$doc_email = $_POST['doc_ea']
@@ -19,27 +20,56 @@
         $stmt -> bind_result($doc_number, $doc_pwd, $doc_id, $doc_dept);//bind result
         $rs=$stmt->fetch();
         $stmt->close();
+        $campid=getcampusid($campusname,$mysqli);
+        $_SESSION['campus_id'] = $campusname;
         $_SESSION['doc_id'] = $doc_id;
         $_SESSION['doc_number'] = $doc_number;//Assign session to doc_number id
         //$uip=$_SERVER['REMOTE_ADDR'];
         //$ldate=date('d/m/Y h:i:s', time());
+        // Attach campus/location to session if available
+        $campus_id = null;
+        $col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='his_docs' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
+        if ($col_exists) {
+            $cstmt = $mysqli->prepare("SELECT campus_id FROM his_docs WHERE doc_id = ? LIMIT 1");
+            if ($cstmt) {
+                $cstmt->bind_param('i', $doc_id);
+                $cstmt->execute();
+                $cres = $cstmt->get_result();
+                if ($crow = $cres->fetch_assoc()) {
+                    $campus_id = $crow['campus_id'];
+                    if (!empty($campus_id)) {
+                        
+                        $_SESSION['working_location_id'] = $campus_id;
+                        $lstmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+                        if ($lstmt) {
+                            $lstmt->bind_param('i', $campus_id);
+                            $lstmt->execute();
+                            $lres = $lstmt->get_result();
+                            if ($lrow = $lres->fetch_assoc()) {
+                                $_SESSION['working_location'] = $lrow['name'];
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if($rs)
             {//if its sucessfull
 
                 if($doc_dept=='Records'){
                     log_action($doc_id,"LOGIN");
-                    header("location:record_dashboard.php");
+                    header("location:record_dashboard.php?$campusid");
                     }
                     else if($doc_dept=='Nursing')
                     {
                         log_action($doc_id,"LOGIN");
-                        header("location:nursing_dashboard.php");
+                        header("location:nursing_dashboard.php?$campusid");
 
                     }
                     else if($doc_dept=='Administrator')
                     {
                         log_action($doc_id,"LOGIN");
-                        header("location:admin_dashboard.php");
+                        header("location:admin_dashboard.php?$campusid");
 
                     }
                     else if($doc_dept=='Cashier')
@@ -78,6 +108,12 @@
                         header("location:vc_dashboard.php");
 
                     }
+                    else if($doc_dept=='Radiology')
+                    {
+                        log_action($doc_id,"LOGIN");
+                        header("location:radiology_dashboard.php");
+
+                    }
             }
 
         else
@@ -92,7 +128,22 @@
 
 
 function pharmacyopeningstock($date,$mysqli){
-    $sql="SELECT * FROM pharmacy_stock where date='$date'"; 
+    $campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
+    $hasCampusCol = 0;
+    if ($campus_id) {
+        $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_stock' AND COLUMN_NAME='campus_id'");
+        if ($resCol) {
+            $rowCol = $resCol->fetch_assoc();
+            $hasCampusCol = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
+        }
+    }
+
+    if ($hasCampusCol && $campus_id) {
+        $sql="SELECT * FROM pharmacy_stock where date='$date' AND campus_id=".(int)$campus_id; 
+    } else {
+        $sql="SELECT * FROM pharmacy_stock where date='$date'"; 
+    }
+
    $result = mysqli_query($mysqli,$sql);
     $num=mysqli_num_rows($result);
         if($num>0){
@@ -105,7 +156,11 @@ function pharmacyopeningstock($date,$mysqli){
             while($reply = mysqli_fetch_array($results)){
                 $name=$reply['name'];
                 $qnt=$reply['quantity'];
-                $quey="insert into pharmacy_stock(name,opening,addstock,closing,date) values('$name','$qnt','0','$qnt','$date')";
+                if ($hasCampusCol && $campus_id) {
+                    $quey="insert into pharmacy_stock(name,opening,addstock,closing,date,campus_id) values('$name','$qnt','0','$qnt','$date','".(int)$campus_id."')";
+                } else {
+                    $quey="insert into pharmacy_stock(name,opening,addstock,closing,date) values('$name','$qnt','0','$qnt','$date')";
+                }
                 $st2 = mysqli_query($mysqli,$quey);
                            
                         }
@@ -134,6 +189,14 @@ function storeopeningstock($date,$mysqli){
             }
 
     
+}
+
+function getcampusid($campusname,$mysqli){
+    $sql="SELECT * FROM campus_locations where name=$campusname"; 
+   $result = mysqli_query($mysqli,$sql);
+    $num=mysqli_num_rows($result);
+    $reply = mysqli_fetch_array($result);
+    return $id;
 }
 ?>
 <!--End Login-->
@@ -215,7 +278,30 @@ function storeopeningstock($date,$mysqli){
                                         <label for="password">Password</label>
                                         <input class="form-control" name="ad_pwd" type="password" required="" id="password" placeholder="Enter your password">
                                     </div>
+                                     <div class="form-group mb-3">
+                                                <!-- Pharmacy location selector inline with prescription fields -->
+                                                    
+                                                                <label for="pharmacy_location_select"> Select Campus Location</label>
+                                                                <?php if (!empty($pharmacy_location_name)): ?>
+                                                                    <small class="form-text text-muted">Current: <?php echo htmlspecialchars($pharmacy_location_name); ?></small>
+                                                                <?php endif; ?>
+                                                                <select id="pharmacy_location_select" name="location" class="form-control" required>
+                                                                    <option value="">-- Select --</option>
+                                                                    <?php
+                                                                    $pl_res = $mysqli->query("SELECT id, name FROM campus_locations ORDER BY name ASC");
+                                                                    if ($pl_res) {
+                                                                        while ($pl = $pl_res->fetch_assoc()) {
+                                                                            $selected = (!empty($pharmacy_location_id) && (int)$pharmacy_location_id === (int)$pl['id']) ? 'selected' : '';
+                                                                            echo "<option value='".intval($pl['id'])."' " . $selected . ">".htmlspecialchars($pl['name'])."</option>";
+                                                                        }
+                                                                    }
+                                                                    ?>
+                                                                </select>
+                                                              
 
+                                    </div>
+
+                                                                            <hr>
                                     <div class="form-group mb-0 text-center">
                                         <button name="admin_login" type="submit" class="ladda-button btn btn-primary"  data-style="expand-right"> Clinic Login Only </button>
                                     </div>

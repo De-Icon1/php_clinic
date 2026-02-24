@@ -3,6 +3,21 @@
 	session_start();
 	include('assets/inc/config.php');
     $datefrm=$_GET['datefrm'];
+    // campus scoping - prefer per-report override `report_campus_id` then session
+    $report_campus = isset($_GET['report_campus_id']) ? (int)$_GET['report_campus_id'] : null;
+    $campus_id = $report_campus ? $report_campus : (isset($_SESSION['campus_id']) ? (int)$_SESSION['campus_id'] : null);
+    function table_has_campus($mysqli, $table)
+    {
+        $t = $mysqli->real_escape_string($table);
+        $q = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" . $t . "' AND COLUMN_NAME='campus_id'";
+        $r = $mysqli->query($q);
+        if ($r) {
+            $row = $r->fetch_assoc();
+            return (int) $row['cnt'] > 0;
+        }
+        return false;
+    }
+    $store_has_campus = table_has_campus($mysqli, 'store_stock');
     $date=date('Y-m-d');
     pharmacyclosingstock($date,$mysqli);
     storeclosingstock($date,$mysqli);
@@ -159,10 +174,20 @@ function storeclosingstock($date,$mysqli){
                                                 *get details of allpatients
                                                 *
                                             */
-                                                $ret="SELECT * FROM store_stock where date='$datefrm' ORDER BY name ASC "; 
-                                                $stmt= $mysqli->prepare($ret) ;
-                                                $stmt->execute() ;//ok
-                                                $res=$stmt->get_result();
+                                                // Apply campus filter when available
+                                                if ($store_has_campus && $campus_id) {
+                                                    $ret = "SELECT * FROM store_stock WHERE date = ? AND campus_id = ? ORDER BY name ASC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('si', $datefrm, $campus_id);
+                                                    $stmt->execute();
+                                                    $res = $stmt->get_result();
+                                                } else {
+                                                    $ret = "SELECT * FROM store_stock WHERE date = ? ORDER BY name ASC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('s', $datefrm);
+                                                    $stmt->execute();
+                                                    $res = $stmt->get_result();
+                                                }
                                                 $cnt=1;
                                                 while($row=$res->fetch_object())
                                                 {

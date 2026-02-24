@@ -2,41 +2,63 @@
 session_start();
 include('assets/inc/config.php'); // DB connection
 
-$success = '';
-$err = '';
-
 /* ============================================================
    AJAX: FETCH CONSUMABLES BASED ON USER WORKING LOCATION
 =============================================================== */
 if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
     header('Content-Type: application/json');
 
-    if (!isset($_SESSION['working_location']) || empty($_SESSION['working_location'])) {
+    // Accept either a numeric `working_location_id` or a text `working_location` name
+    if ((!isset($_SESSION['working_location']) || empty($_SESSION['working_location'])) && (!isset($_SESSION['working_location_id']) || empty($_SESSION['working_location_id']))) {
         echo json_encode(['status'=>'error','message'=>'Working location not set.']);
         exit;
     }
 
-    $location = $_SESSION['working_location'];
+    $use_id = false;
+    $location_id = null;
+    if (isset($_SESSION['working_location_id']) && intval($_SESSION['working_location_id']) > 0) {
+        $use_id = true;
+        $location_id = intval($_SESSION['working_location_id']);
+    } else {
+        $location = $_SESSION['working_location'];
+    }
 
-    // Strictly fetch consumables from current campus/location
-    $query = "SELECT 
-                s.id,
-                c.name AS consumable_name,
-                c.category,
-                s.quantity,
-                cl.name AS location,
-                s.date_added
-              FROM lab_consumable_stock s
-              JOIN lab_consumables c ON c.id = s.consumable_id
-              JOIN campus_locations cl ON cl.id = s.campus_id
-              WHERE s.campus_id = (
-                    SELECT id FROM campus_locations WHERE name = ?
-              )
-              ORDER BY c.name ASC";
+    // Fetch consumables filtered by campus_id when we have an id, otherwise fall back to name
+    if ($use_id) {
+        $query = "SELECT 
+                    s.id,
+                    c.name AS consumable_name,
+                    c.category,
+                    s.quantity,
+                    cl.name AS location
+                  FROM lab_consumable_stock s
+                  JOIN lab_consumables c ON c.id = s.consumable_id
+                  JOIN campus_locations cl ON cl.id = s.campus_id
+                  WHERE s.campus_id = ?
+                  ORDER BY c.name ASC";
 
-    $stmt = $mysqli->prepare($query);
-    $stmt->bind_param("s", $location);
-    $stmt->execute();
+        $stmt = $mysqli->prepare($query);
+        $stmt->bind_param("i", $location_id);
+        $stmt->execute();
+    } else {
+        $query = "SELECT 
+                    s.id,
+                    c.name AS consumable_name,
+                    c.category,
+                    s.quantity,
+                    cl.name AS location
+                  FROM lab_consumable_stock s
+                  JOIN lab_consumables c ON c.id = s.consumable_id
+                  JOIN campus_locations cl ON cl.id = s.campus_id
+                  WHERE s.campus_id = (
+                        SELECT id FROM campus_locations WHERE name = ?
+                  )
+                  ORDER BY c.name ASC";
+
+        $stmt = $mysqli->prepare($query);
+        $stmt->bind_param("s", $location);
+        $stmt->execute();
+    }
     $result = $stmt->get_result();
 
     $consumables = [];
@@ -45,8 +67,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
     }
 
     echo json_encode(['status'=>'success','data'=>$consumables]);
-    // DEBUGGING
-file_put_contents("debug.txt", print_r($consumables, true));
     exit;
 }
 
@@ -56,7 +76,9 @@ file_put_contents("debug.txt", print_r($consumables, true));
 if (isset($_POST['pick']) && isset($_POST['id']) && isset($_POST['qty'])) {
     header('Content-Type: application/json');
 
-    if (!isset($_SESSION['working_location'])) {
+    // Require a working location so we always pick from a specific campus store
+    if ((!isset($_SESSION['working_location']) || empty($_SESSION['working_location'])) &&
+        (!isset($_SESSION['working_location_id']) || empty($_SESSION['working_location_id']))) {
         echo json_encode(['status'=>'error','message'=>'Working location not set.']);
         exit;
     }
@@ -69,85 +91,70 @@ if (isset($_POST['pick']) && isset($_POST['id']) && isset($_POST['qty'])) {
         exit;
     }
 
-    // Start safe transaction
+    // Resolve campus/location id (prefer stored id, fall back to name lookup)
+    $campus_id = null;
+    if (isset($_SESSION['working_location_id']) && intval($_SESSION['working_location_id']) > 0) {
+        $campus_id = intval($_SESSION['working_location_id']);
+    } else {
+        $locationName = $_SESSION['working_location'];
+        $locStmt = $mysqli->prepare("SELECT id FROM campus_locations WHERE name = ? LIMIT 1");
+        if ($locStmt) {
+            $locStmt->bind_param('s', $locationName);
+            $locStmt->execute();
+            $locRes = $locStmt->get_result();
+            if ($locRow = $locRes->fetch_assoc()) {
+                $campus_id = intval($locRow['id']);
+            }
+        }
+    }
+
+    if (!$campus_id) {
+        echo json_encode(['status'=>'error','message'=>'Unable to resolve working location.']);
+        exit;
+    }
+
+    // Start safe transaction so deductions are atomic per campus store
     $mysqli->begin_transaction();
 
     try {
         /* ------------------------------------------------------
-           1. CHECK STOCK TABLE FOR THIS ID
+           1. CHECK STOCK TABLE FOR THIS ID AND CAMPUS
         ------------------------------------------------------ */
         $stmt = $mysqli->prepare("
-            SELECT quantity, consumable_id 
+            SELECT quantity 
             FROM lab_consumable_stock 
-            WHERE id = ?
+            WHERE id = ? AND campus_id = ?
         ");
-        $stmt->bind_param("i", $id);
+        $stmt->bind_param("ii", $id, $campus_id);
         $stmt->execute();
         $stockResult = $stmt->get_result();
 
         if ($stockResult->num_rows === 0) {
-            throw new Exception("Consumable not found in stock table.");
+            throw new Exception("Consumable not found for your current location.");
         }
 
         $stockRow = $stockResult->fetch_assoc();
         $stockQty = $stockRow['quantity'];
-        $consumableId = $stockRow['consumable_id'];
 
         if ($qty > $stockQty) {
-            throw new Exception("Quantity exceeds available location stock.");
+            throw new Exception("Quantity exceeds available stock at this location.");
         }
 
         /* ------------------------------------------------------
-           2. CHECK MAIN lab_consumables TABLE
-        ------------------------------------------------------ */
-        $stmt = $mysqli->prepare("
-            SELECT quantity 
-            FROM lab_consumables 
-            WHERE id = ?
-        ");
-        $stmt->bind_param("i", $consumableId);
-        $stmt->execute();
-        $consResult = $stmt->get_result();
-
-        if ($consResult->num_rows === 0) {
-            throw new Exception("Consumable missing from main table.");
-        }
-
-        $consRow = $consResult->fetch_assoc();
-        $mainQty = $consRow['quantity'];
-
-        if ($qty > $mainQty) {
-            throw new Exception("Master stock insufficient.");
-        }
-
-        /* ------------------------------------------------------
-           3. UPDATE lab_consumable_stock
+           2. UPDATE lab_consumable_stock ONLY FOR THIS CAMPUS
         ------------------------------------------------------ */
         $newStockQty = $stockQty - $qty;
 
         $stmt = $mysqli->prepare("
             UPDATE lab_consumable_stock 
             SET quantity = ? 
-            WHERE id = ?
+            WHERE id = ? AND campus_id = ?
         ");
-        $stmt->bind_param("ii", $newStockQty, $id);
+        $stmt->bind_param("iii", $newStockQty, $id, $campus_id);
         $stmt->execute();
 
         /* ------------------------------------------------------
-           4. UPDATE lab_consumables (MASTER TABLE)
-        ------------------------------------------------------ */
-        $newMainQty = $mainQty - $qty;
-
-        $stmt = $mysqli->prepare("
-            UPDATE lab_consumables 
-            SET quantity = ? 
-            WHERE id = ?
-        ");
-        $stmt->bind_param("ii", $newMainQty, $consumableId);
-        $stmt->execute();
-
-        /* ------------------------------------------------------
-           5. COMMIT TRANSACTION
+           3. COMMIT TRANSACTION
         ------------------------------------------------------ */
         $mysqli->commit();
 
@@ -165,13 +172,41 @@ if (isset($_POST['pick']) && isset($_POST['id']) && isset($_POST['qty'])) {
    SET OR CHANGE WORKING LOCATION
 =============================================================== */
 if (isset($_POST['set_location'])) {
-    $_SESSION['working_location'] = $_POST['working_location'];
+    $wl = $_POST['working_location'];
+    if (is_numeric($wl)) {
+        $id = intval($wl);
+        $stmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $r = $stmt->get_result();
+            if ($row = $r->fetch_assoc()) {
+                $_SESSION['working_location_id'] = $id;
+                $_SESSION['working_location'] = $row['name'];
+            } else {
+                $_SESSION['working_location_id'] = $id;
+                $_SESSION['working_location'] = '';
+            }
+        }
+    } else {
+        $_SESSION['working_location'] = $wl;
+        $stmt = $mysqli->prepare("SELECT id FROM campus_locations WHERE name = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('s', $wl);
+            $stmt->execute();
+            $r = $stmt->get_result();
+            if ($row = $r->fetch_assoc()) {
+                $_SESSION['working_location_id'] = intval($row['id']);
+            }
+        }
+    }
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
 
 if (isset($_GET['clear_location'])) {
     unset($_SESSION['working_location']);
+    unset($_SESSION['working_location_id']);
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
@@ -179,25 +214,38 @@ if (isset($_GET['clear_location'])) {
 
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Lab Consumables - Pick Items</title>
-    <link href="assets/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="p-4">
-<div class="container-fluid">
-    <h3 class="mb-4">Lab Consumables (Pick Items)</h3>
 
-    <?php if (!isset($_SESSION['working_location'])): ?>
+    <!-- Head -->
+    <?php include('assets/inc/head.php'); ?>
+
+    <body>
+
+        <!-- Begin page -->
+        <div id="wrapper">
+
+            <!-- Topbar -->
+            <?php include('assets/inc/nav_r.php'); ?>
+
+            <!-- Left Sidebar: use Lab Navigation instead of Admin -->
+            <?php include('assets/inc/slidebar_lab.php'); ?>
+
+            <!-- Start Page Content here -->
+            <div class="content-page">
+                <div class="content">
+                    <div class="container-fluid">
+
+                        <h3 class="mb-4">Lab Consumables (Pick Items)</h3>
+
+                        <?php if (!isset($_SESSION['working_location']) && !isset($_SESSION['working_location_id'])): ?>
         <form method="post" class="mb-4">
             <div class="row g-2">
                 <div class="col-12 col-md-4">
                     <select name="working_location" class="form-control" required>
                         <option value="">-- Select Your Working Location --</option>
                         <?php
-                        $campuses = $mysqli->query("SELECT name FROM campus_locations ORDER BY name ASC");
+                        $campuses = $mysqli->query("SELECT id, name FROM campus_locations ORDER BY name ASC");
                         while($c = $campuses->fetch_assoc()){
-                            echo "<option value='{$c['name']}'>{$c['name']}</option>";
+                            echo "<option value='".intval($c['id'])."'>".htmlspecialchars($c['name'])."</option>";
                         }
                         ?>
                     </select>
@@ -222,7 +270,7 @@ if (isset($_GET['clear_location'])) {
                         <th>Category</th>
                         <th>Quantity</th>
                         <th>Location</th>
-                        <th>Action</th>
+                        <th>Pick Quantity</th>
                     </tr>
                 </thead>
                 <tbody id="consumable_results">
@@ -230,30 +278,6 @@ if (isset($_GET['clear_location'])) {
                 </tbody>
             </table>
         </div>
-
-        <!-- Modal -->
-        <div class="modal fade" id="pickModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Pick Consumable</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="pickForm">
-                            <input type="hidden" name="id" id="modal_id">
-                            <div class="mb-3">
-                                <label for="modal_qty" class="form-label">Quantity</label>
-                                <input type="number" class="form-control" id="modal_qty" name="qty" min="1" required>
-                            </div>
-                            <button type="submit" class="btn btn-success w-100">Pick</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <script src="assets/js/bootstrap.bundle.min.js"></script>
 
         <script>
         async function fetchConsumables() {
@@ -275,7 +299,12 @@ if (isset($_GET['clear_location'])) {
                             <td>${row.category}</td>
                             <td>${row.quantity}</td>
                             <td>${row.location}</td>
-                            <td><button class="btn btn-sm btn-success" onclick="openPickModal(${row.id}, ${row.quantity})">Pick</button></td>
+                            <td>
+                                <input type="number" min="1" max="${row.quantity}" value="1" 
+                                       class="form-control form-control-sm d-inline-block" 
+                                       style="width:80px" id="pick_qty_${row.id}">
+                                <button class="btn btn-sm btn-success ms-1" onclick="pickConsumable(${row.id}, ${row.quantity})">Pick</button>
+                            </td>
                         </tr>
                     `;
                 });
@@ -284,18 +313,23 @@ if (isset($_GET['clear_location'])) {
             }
         }
 
-        function openPickModal(id, maxQty) {
-            document.getElementById('modal_id').value = id;
-            const qtyInput = document.getElementById('modal_qty');
-            qtyInput.value = '';
-            qtyInput.max = maxQty;
-            const modal = new bootstrap.Modal(document.getElementById('pickModal'));
-            modal.show();
-        }
+        async function pickConsumable(id, maxQty) {
+            const input = document.getElementById('pick_qty_' + id);
+            let qty = parseInt(input.value, 10);
 
-        document.getElementById('pickForm').addEventListener('submit', async function(e){
-            e.preventDefault();
-            const formData = new FormData(this);
+            if (isNaN(qty) || qty <= 0) {
+                alert('Please enter a valid quantity.');
+                return;
+            }
+
+            if (qty > maxQty) {
+                alert('You cannot pick more than the available quantity (' + maxQty + ').');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('id', id);
+            formData.append('qty', qty);
             formData.append('pick', 1);
 
             const res = await fetch('<?= $_SERVER['PHP_SELF'] ?>', {
@@ -304,13 +338,19 @@ if (isset($_GET['clear_location'])) {
             });
             const data = await res.json();
             alert(data.message);
-            bootstrap.Modal.getInstance(document.getElementById('pickModal')).hide();
             fetchConsumables();
-        });
+        }
 
         document.addEventListener('DOMContentLoaded', fetchConsumables);
         </script>
     <?php endif; ?>
-</div>
-</body>
+
+                    </div> <!-- container-fluid -->
+                </div> <!-- content -->
+            </div> <!-- content-page -->
+
+        </div> <!-- wrapper -->
+
+    </body>
+
 </html>

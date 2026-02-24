@@ -2,7 +2,10 @@
 session_start();
 include('assets/inc/config.php');//get configuration file
 include('assets/inc/functions.php');
-log_action($_SESSION['doc_id'],"LOGOUT");
+// Only log if a valid user id exists in session
+if (isset($_SESSION['doc_id']) && !empty($_SESSION['doc_id'])) {
+    log_action($_SESSION['doc_id'], "LOGOUT");
+}
     unset($_SESSION['doc_id']);
     unset($_SESSION['doc_number']);
     session_destroy();
@@ -41,7 +44,10 @@ log_action($_SESSION['doc_id'],"LOGOUT");
                                 
                                 <div class="text-center w-75 m-auto">
                                     <a href="his_admin_logout.php">
-                                        <span><img src="assets/images/logo-dark.png" alt="" height="22"></span>
+                                        <span>
+                                            <img src="assets/images/OOU.png" alt="OOU Logo" height="22">
+                                            <img src="assets/images/logo-dark.png" alt="" height="22">
+                                        </span>
                                     </a>
                                 </div>
 

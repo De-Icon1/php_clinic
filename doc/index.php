@@ -9,10 +9,43 @@
         $stmt=$mysqli->prepare("SELECT doc_number, doc_pwd, doc_id FROM his_docs WHERE  doc_number=? AND doc_pwd=? ");//sql to log in user
         $stmt->bind_param('ss', $doc_number, $doc_pwd);//bind fetched parameters
         $stmt->execute();//execute bind
-        $stmt -> bind_result($doc_number, $doc_pwd ,$doc_id);//bind result
-        $rs=$stmt->fetch();
+        $stmt->bind_result($doc_number, $doc_pwd ,$doc_id);//bind result
+        $rs = $stmt->fetch();
+        // Close primary login statement before issuing any further queries
+        $stmt->close();
         $_SESSION['doc_id'] = $doc_id;
         $_SESSION['doc_number'] = $doc_number;//Assign session to doc_number id
+        // Attach campus/location to session if available so doctors are location-restricted
+        $campus_id = null;
+        $col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='his_docs' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
+        if ($col_exists) {
+            $cstmt = $mysqli->prepare("SELECT campus_id FROM his_docs WHERE doc_id = ? LIMIT 1");
+            if ($cstmt) {
+                $cstmt->bind_param('i', $doc_id);
+                $cstmt->execute();
+                $cres = $cstmt->get_result();
+                if ($crow = $cres->fetch_assoc()) {
+                    $campus_id = $crow['campus_id'];
+                    if (!empty($campus_id)) {
+                        $_SESSION['campus_id'] = $campus_id;
+                        // also store numeric id for APIs that prefer it
+                        $_SESSION['working_location_id'] = $campus_id;
+                        // Also set a human-readable working location name when possible
+                        $lstmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+                        if ($lstmt) {
+                            $lstmt->bind_param('i', $campus_id);
+                            $lstmt->execute();
+                            $lres = $lstmt->get_result();
+                            if ($lrow = $lres->fetch_assoc()) {
+                                $_SESSION['working_location'] = $lrow['name'];
+                            }
+                            $lstmt->close();
+                        }
+                    }
+                }
+                $cstmt->close();
+            }
+        }
         //$uip=$_SERVER['REMOTE_ADDR'];
         //$ldate=date('d/m/Y h:i:s', time());
         if($rs)
@@ -33,7 +66,7 @@
     
 <head>
         <meta charset="utf-8" />
-        <title>Hospital Management System -A Super Responsive Information System</title>
+        <title>OOU Hospital Management System -A Super Responsive Information System</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta content="" name="description" />
         <meta content="" name="MartDevelopers" />
@@ -89,7 +122,10 @@
                                 
                                 <div class="text-center w-75 m-auto">
                                     <a href="index.php">
-                                        <span><img src="assets/images/logo-dark.png" alt="" height="22"></span>
+                                        <span>
+                                            <img src="assets/images/OOU.png" alt="OOU Logo" height="18">
+                                            <img src="assets/images/logo-dark.png" alt="" height="18">
+                                        </span>
                                     </a>
                                     <p class="text-muted mb-4 mt-3">Enter your email address and password to access Doctor panel.</p>
                                 </div>
@@ -105,7 +141,7 @@
                                         <label for="password">Password</label>
                                         <input class="form-control" name="doc_pwd" type="password" required="" id="password" placeholder="Enter your password">
                                     </div>
-
+                                    
                                     <div class="form-group mb-0 text-center">
                                         <button class="btn btn-success btn-block" name="doc_login" type="submit"> Log In </button>
                                     </div>

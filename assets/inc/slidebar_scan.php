@@ -18,6 +18,13 @@
                             </li>
 
                             <li>
+                                <a href="scan_consumables_pick.php">
+                                    <img src="./assets/img/Modify.png"></i>
+                                    <span> Scan Consumables pick</span>
+                                </a>
+                            </li>
+
+                            <li>
                                 <a href="javascript: void(0);">
                                     <img src="./assets/img/student.jpg"></i>
                                     <span> Patient Scan Portal </span>

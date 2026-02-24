@@ -2,6 +2,27 @@
 session_start();
 include('assets/inc/config.php');
 
+// Provide CSV format template for lab consumables import
+if (isset($_GET['download_format'])) {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="lab_stock_format.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['name','category','campus_name','quantity','supplier','lpo']);
+    fputcsv($out, ['Gloves','Consumable','Main Store','100','Acme Supplies','LPO-001']);
+    fclose($out);
+    exit();
+}
+
+// Ensure lab_consumable_stock has supplier_name and lpo_ref columns
+$col1 = $mysqli->query("SHOW COLUMNS FROM lab_consumable_stock LIKE 'supplier_name'");
+if (!$col1 || $col1->num_rows == 0) {
+    @ $mysqli->query("ALTER TABLE lab_consumable_stock ADD COLUMN supplier_name VARCHAR(255) DEFAULT NULL");
+}
+$col2 = $mysqli->query("SHOW COLUMNS FROM lab_consumable_stock LIKE 'lpo_ref'");
+if (!$col2 || $col2->num_rows == 0) {
+    @ $mysqli->query("ALTER TABLE lab_consumable_stock ADD COLUMN lpo_ref VARCHAR(100) DEFAULT NULL");
+}
+
 /* ===============================
    DELETE STOCK
 =============================== */
@@ -55,6 +76,8 @@ if(isset($_POST['add_stock'])){
     $consumable_id = $_POST['consumable_id'];
     $campus_name = $_POST['location'];
     $quantity = $_POST['quantity'];
+    $supplier = isset($_POST['supplier']) ? trim($_POST['supplier']) : null;
+    $lpo = isset($_POST['lpo']) ? trim($_POST['lpo']) : null;
 
     // Get campus_id
     $campus = $mysqli->prepare("SELECT id FROM campus_locations WHERE name=?");
@@ -73,13 +96,18 @@ if(isset($_POST['add_stock'])){
         $row = $check->get_result()->fetch_assoc();
 
         if($row){
-            $update = $mysqli->prepare("UPDATE lab_consumable_stock SET quantity = quantity + ? WHERE id=?");
-            $update->bind_param("ii", $quantity, $row['id']);
-            $update->execute();
+            // update quantity and optionally supplier/LPO
+            $update = $mysqli->prepare("UPDATE lab_consumable_stock SET quantity = quantity + ?, supplier_name = ?, lpo_ref = ? WHERE id = ?");
+            if ($update) {
+                $update->bind_param("issi", $quantity, $supplier, $lpo, $row['id']);
+                $update->execute();
+            }
         } else {
-            $insert = $mysqli->prepare("INSERT INTO lab_consumable_stock (consumable_id, campus_id, quantity) VALUES (?, ?, ?)");
-            $insert->bind_param("iii", $consumable_id, $campus_id, $quantity);
-            $insert->execute();
+            $insert = $mysqli->prepare("INSERT INTO lab_consumable_stock (consumable_id, campus_id, quantity, supplier_name, lpo_ref) VALUES (?, ?, ?, ?, ?)");
+            if ($insert) {
+                $insert->bind_param("iiiss", $consumable_id, $campus_id, $quantity, $supplier, $lpo);
+                $insert->execute();
+            }
         }
 
         if($insert || $update){
@@ -157,7 +185,7 @@ if(isset($_GET['export_stock'])){
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="lab_stock.csv"');
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Consumable Name','Category','Campus','Quantity']);
+    fputcsv($output, ['Consumable Name','Category','Campus','Quantity','Supplier','Reference/LPO']);
 
     $sql = "SELECT s.quantity, cl.name AS campus_name, c.name AS consumable_name, c.category
             FROM lab_consumable_stock s
@@ -166,7 +194,7 @@ if(isset($_GET['export_stock'])){
             ORDER BY cl.name ASC, c.name ASC";
     $res = $mysqli->query($sql);
     while($row = $res->fetch_assoc()){
-        fputcsv($output, [$row['consumable_name'], $row['category'], $row['campus_name'], $row['quantity']]);
+        fputcsv($output, [$row['consumable_name'], $row['category'], $row['campus_name'], $row['quantity'], $row['supplier_name'] ?? '', $row['lpo_ref'] ?? '']);
     }
     fclose($output);
     exit();
@@ -181,7 +209,13 @@ if(isset($_POST['import_stock'])){
         $row = 0;
         while(($data = fgetcsv($handle, 1000, ",")) !== FALSE){
             if($row++ == 0) continue; // skip header
-            list($name, $category, $campus_name, $quantity) = $data;
+            // Expect: name, category, campus_name, quantity, supplier(optional), lpo(optional)
+            $name = $data[0] ?? '';
+            $category = $data[1] ?? '';
+            $campus_name = $data[2] ?? '';
+            $quantity = isset($data[3]) ? (int)$data[3] : 0;
+            $supplier = $data[4] ?? null;
+            $lpo = $data[5] ?? null;
 
             // Get consumable_id
             $stmt = $mysqli->prepare("SELECT id FROM lab_consumables WHERE name=? AND category=?");
@@ -206,12 +240,12 @@ if(isset($_POST['import_stock'])){
             $existing = $check->get_result()->fetch_assoc();
 
             if($existing){
-                $update = $mysqli->prepare("UPDATE lab_consumable_stock SET quantity=? WHERE id=?");
-                $update->bind_param("ii", $quantity, $existing['id']);
+                $update = $mysqli->prepare("UPDATE lab_consumable_stock SET quantity=?, supplier_name=?, lpo_ref=? WHERE id=?");
+                $update->bind_param("issi", $quantity, $supplier, $lpo, $existing['id']);
                 $update->execute();
             } else {
-                $insert = $mysqli->prepare("INSERT INTO lab_consumable_stock (consumable_id, campus_id, quantity) VALUES (?,?,?)");
-                $insert->bind_param("iii", $consumable_id, $campus_id, $quantity);
+                $insert = $mysqli->prepare("INSERT INTO lab_consumable_stock (consumable_id, campus_id, quantity, supplier_name, lpo_ref) VALUES (?,?,?,?,?)");
+                $insert->bind_param("iiiss", $consumable_id, $campus_id, $quantity, $supplier, $lpo);
                 $insert->execute();
             }
         }
@@ -328,6 +362,14 @@ if(isset($_GET['del_campus'])){
                                     <label>Quantity</label>
                                     <input type="number" required name="quantity" class="form-control">
                                 </div>
+                                <div class="form-group col-md-3">
+                                    <label>Supplier Name</label>
+                                    <input type="text" name="supplier" class="form-control" placeholder="Supplier (optional)">
+                                </div>
+                                <div class="form-group col-md-3">
+                                    <label>Reference / LPO</label>
+                                    <input type="text" name="lpo" class="form-control" placeholder="Ref / LPO (optional)">
+                                </div>
                             </div>
                             <button type="submit" name="add_stock" class="btn btn-success">Add Stock</button>
                         </form>
@@ -433,12 +475,12 @@ if(isset($_GET['del_campus'])){
                         <table class="table table-striped table-bordered">
                             <thead>
                                 <tr>
-                                    <th>Campus</th><th>Item</th><th>Category</th><th>Quantity</th><th>Action</th>
+                                    <th>Campus</th><th>Item</th><th>Category</th><th>Quantity</th><th>Supplier</th><th>Reference / LPO</th><th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php
-                                $sql = "SELECT s.id, s.quantity, cl.name AS campus_name, c.name AS consumable_name, c.category
+                                $sql = "SELECT s.id, s.quantity, s.supplier_name, s.lpo_ref, cl.name AS campus_name, c.name AS consumable_name, c.category
                                         FROM lab_consumable_stock s
                                         JOIN lab_consumables c ON c.id = s.consumable_id
                                         JOIN campus_locations cl ON cl.id = s.campus_id
@@ -452,12 +494,63 @@ if(isset($_GET['del_campus'])){
                                     <td><?= $row['consumable_name']; ?></td>
                                     <td><?= $row['category']; ?></td>
                                     <td><?= $row['quantity']; ?></td>
+                                    <td><?= htmlspecialchars($row['supplier_name'] ?? ''); ?></td>
+                                    <td><?= htmlspecialchars($row['lpo_ref'] ?? ''); ?></td>
                                     <td>
                                         <a href="setup_consumables.php?del_stock=<?= $row['id']; ?>">
                                             <img src="assets/images/del.png" height="20">
                                         </a>
                                     </td>
                                 </tr>
+                                <?php } ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Compact Campus Summary for Quick Visual Check -->
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h5>Stock Summary by Campus (for visual check)</h5>
+                        <p class="text-muted mb-2">
+                            This table shows total quantity per consumable at each campus so you can confirm location-based deductions from the Lab Location screen.
+                        </p>
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Campus</th>
+                                    <th>Consumable</th>
+                                    <th>Category</th>
+                                    <th class="text-right">Total Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $sumSql = "SELECT cl.name AS campus_name, c.name AS consumable_name, c.category,
+                                                   SUM(s.quantity) AS total_qty
+                                           FROM lab_consumable_stock s
+                                           JOIN lab_consumables c ON c.id = s.consumable_id
+                                           JOIN campus_locations cl ON cl.id = s.campus_id
+                                           GROUP BY cl.id, c.id
+                                           ORDER BY cl.name ASC, c.name ASC";
+                                $sumRes = $mysqli->query($sumSql);
+                                if($sumRes && $sumRes->num_rows > 0){
+                                    while($row = $sumRes->fetch_assoc()){
+                                        $low = $row['total_qty'] < 10 ? 'style="background-color:#fff3cd;"' : '';
+                                ?>
+                                    <tr <?= $low ?>>
+                                        <td><?= $row['campus_name']; ?></td>
+                                        <td><?= $row['consumable_name']; ?></td>
+                                        <td><?= $row['category']; ?></td>
+                                        <td class="text-right"><?= (int)$row['total_qty']; ?></td>
+                                    </tr>
+                                <?php
+                                    }
+                                } else {
+                                ?>
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">No stock records found.</td>
+                                    </tr>
                                 <?php } ?>
                             </tbody>
                         </table>

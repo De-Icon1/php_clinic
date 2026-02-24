@@ -9,17 +9,21 @@
     $vit_heartpulse = $_POST['vit_heartpulse'] . "P";
     $vit_resprate = $_POST['vit_resprate'] . "R";
     $vit_bloodpress = $_POST['vit_bloodpress'] . "mmHg";
+    $vit_sugarlevel = $_POST['vit_sugarlevel'] . "mg/dL";
+    $vit_Spo2 = $_POST['vit_Spo2'] . "%";
+    $vit_height = $_POST['vit_height'] . "cm";
+    $vit_weight = $_POST['vit_weight'] . "kg";
     $pic = $_GET['pic'];
     $status = 'Checked';
     $dated = date('Y-m-d'); // Used for sendsignal table
     $current_time = date('Y-m-d H:i:s'); // Precise record timestamp
 
     $query = "INSERT INTO his_vitals 
-              (date, fullname, vit_pat_number, vit_bodytemp, vit_heartpulse, vit_resprate, vit_bloodpress, vit_daterec, picture)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+              (date, fullname, vit_pat_number, vit_bodytemp, vit_heartpulse, vit_resprate, vit_bloodpress, vit_sugarlevel, vit_Spo2, vit_height, vit_weight, vit_daterec, picture)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     $stmt = $mysqli->prepare($query);
-    $stmt->bind_param('sssssssss',
+    $stmt->bind_param('sssssssssssss',
         $dated,
         $name,
         $vit_pat_number,
@@ -27,6 +31,10 @@
         $vit_heartpulse,
         $vit_resprate,
         $vit_bloodpress,
+        $vit_sugarlevel,
+        $vit_Spo2,
+        $vit_height,
+        $vit_weight,
         $current_time,   // Use current timestamp, not $_POST['datet']
         $pic
     );
@@ -174,6 +182,26 @@
                                                         <input required="required" type="text"  name="vit_bloodpress"  class="form-control"  id="inputPassword4" placeholder="mmHg">
                                                     </div>
 
+                                                    <div class="form-group col-md-3">
+                                                        <label for="inputPassword4" class="col-form-label">Patient Sugar Level mg/dL</label>
+                                                        <input required="required" type="text"  name="vit_sugarlevel"  class="form-control"  id="inputPassword4" placeholder="mg/dL">
+                                                    </div>
+
+                                                    <div class="form-group col-md-3">
+                                                        <label for="inputPassword4" class="col-form-label">Patient SpO2 %</label>
+                                                        <input required="required" type="text"  name="vit_Spo2"  class="form-control"  id="inputPassword4" placeholder="%">
+                                                    </div>
+
+                                                    <div class="form-group col-md-3">
+                                                        <label for="inputPassword4" class="col-form-label">Patient Height cm</label>
+                                                        <input required="required" type="text"  name="vit_height"  class="form-control"  id="inputPassword4" placeholder="cm">
+                                                    </div>
+
+                                                    <div class="form-group col-md-3">
+                                                        <label for="inputPassword4" class="col-form-label">Patient Weight kg</label>
+                                                        <input required="required" type="text"  name="vit_weight"  class="form-control"  id="inputPassword4" placeholder="kg">
+                                                    </div>
+                                                    
                                                 </div>
 
                                                 <button type="submit" name="add_patient_vitals" class="ladda-button btn btn-success" data-style="expand-right">Add Vitals</button>

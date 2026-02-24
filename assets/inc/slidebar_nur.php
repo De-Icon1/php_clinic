@@ -27,9 +27,15 @@
                                     <li>
                                         <a href="./his_admin_todays_visitn.php">Todays Patient Visit</a>
                                     </li>
-                                    
-                                    
                                 </ul>
+                            </li>
+
+                            <!-- Nurse Consumables (location-based picker) -->
+                            <li>
+                                <a href="nurse_consumables_pick.php">
+                                    <img src="./assets/img/Modify.png">
+                                    <span> Nurse Consumables Pick</span>
+                                </a>
                             </li>
 
                             <li>

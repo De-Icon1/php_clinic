@@ -5,11 +5,80 @@
   check_login();
 
   $doc_id=$_SESSION['doc_id'];
+  $campusid=$_SESSION['campus_id'];
    $pat_id=$_GET['pat_id'];
      $pat_name=$_GET['pat_name'];
   //$doc_number = $_SERVER['doc_number'];
+    $date=date('Y-m-d');
 
-     $date=date('Y-m-d');
+// Doctor's campus from session (set at login). Still used for some legacy flows
+$campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
+
+// Pharmacy location selection for doctor (same pattern as nurse/lab working location)
+$pharmacy_location_id   = isset($_SESSION['pharmacy_location_id']) ? (int) $_SESSION['pharmacy_location_id'] : 0;
+$pharmacy_location_name = isset($_SESSION['pharmacy_location_name']) ? $_SESSION['pharmacy_location_name'] : '';
+
+// Allow doctor to set or change pharmacy location explicitly
+if (isset($_POST['set_pharmacy_location'])) {
+    $loc = $_POST['pharmacy_location'];
+    if (is_numeric($loc)) {
+        $id = (int) $loc;
+        $stmt = $mysqli->prepare("SELECT name FROM pharmacy_location WHERE id = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($row = $res->fetch_assoc()) {
+                $_SESSION['pharmacy_location_id']   = $id;
+                $_SESSION['pharmacy_location_name'] = $row['name'];
+                $pharmacy_location_id   = $id;
+                $pharmacy_location_name = $row['name'];
+            } else {
+                // store id even if name missing
+                $_SESSION['pharmacy_location_id']   = $id;
+                $_SESSION['pharmacy_location_name'] = '';
+                $pharmacy_location_id   = $id;
+                $pharmacy_location_name = '';
+            }
+            $stmt->close();
+        }
+    }
+
+    // redirect back to same patient view to avoid resubmission
+    $redir = "his_doc_view_single_patient.php?pat_id=".urlencode($pat_id)."&&pat_name=".urlencode($pat_name);
+    header("Location: " . $redir);
+    exit;
+}
+
+if (isset($_GET['clear_pharmacy_location'])) {
+    unset($_SESSION['pharmacy_location_id']);
+    unset($_SESSION['pharmacy_location_name']);
+    $pharmacy_location_id   = 0;
+    $pharmacy_location_name = '';
+
+    $redir = "his_doc_view_single_patient.php?pat_id=".urlencode($pat_id)."&&pat_name=".urlencode($pat_name);
+    header("Location: " . $redir);
+    exit;
+}
+
+// Legacy campus label (may still be used as a fallback in some UIs)
+$campus_label = '';
+if ($campus_id) {
+    $campusNameStmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+    if ($campusNameStmt) {
+        $campusNameStmt->bind_param('i', $campus_id);
+        $campusNameStmt->execute();
+        $cRes = $campusNameStmt->get_result();
+        if ($cRow = $cRes->fetch_assoc()) {
+            $campus_label = $cRow['name'];
+        }
+        $campusNameStmt->close();
+    }
+
+    if ($campus_label === '' || $campus_label === null) {
+        $campus_label = 'Campus ID ' . $campus_id;
+    }
+}
 
             $result=mysqli_query($mysqli,"select * from doc_procedure where date='$date'");
             $reply = mysqli_fetch_array($result);
@@ -114,6 +183,16 @@ if(isset($_GET['dels'])){
 
       }
     
+
+function getcampus($campusid,$mysqli){
+    $sql="SELECT * FROM campus_locations where id=$campusid"; 
+   $result = mysqli_query($mysqli,$sql);
+    $num=mysqli_num_rows($result);
+    $reply = mysqli_fetch_array($result);
+    $name=$reply['name'];
+    return $name;
+}
+
  if (isset($_POST['prdrug'])) {
     $date = date('Y-m-d');
     $drug = trim($_POST['drug']);
@@ -142,8 +221,8 @@ if (!$stmt) {
     die("Prepare failed: " . $mysqli->error);
 }
 
-// Compute total amount
-$dtot = getdrugtot($mysqli, $drug, $tot);
+// Compute total amount (respect doctor's campus if available)
+$dtot = getdrugtot($mysqli, $drug, $tot, $campus_id);
 
 // Guarantee a numeric value
 if (!isset($dtot) || $dtot === null || $dtot === '' || !is_numeric($dtot)) {
@@ -173,18 +252,28 @@ if (!$stmt->execute()) {
 
  if(isset($_POST['finalsub'])){
     $date=date('Y-m-d');
-    $visit=$_POST['visit'];
-    $diag=$_POST['diagbox'];
-    $pro=$_POST['probox'];
-    $plan=$_POST['plan'];
-    $slbox=$_POST['slbox'];
-    $proamnt=$_POST['proamnt'];
-    $cons=$_POST['cons'];
+    $visit   = isset($_POST['visit'])   ? trim($_POST['visit'])   : '';
+    $diag    = isset($_POST['diagbox']) ? trim($_POST['diagbox']) : '';
+    $pro     = isset($_POST['probox'])  ? trim($_POST['probox'])  : '';
+    $plan    = isset($_POST['plan'])    ? trim($_POST['plan'])    : '';
+    $slbox   = isset($_POST['slbox'])   ? trim($_POST['slbox'])   : '';
+    $proamnt = isset($_POST['proamnt']) ? floatval($_POST['proamnt']) : 0;
+    $cons    = isset($_POST['cons'])    ? floatval($_POST['cons'])    : 0;
     $totbill=$proamnt + $cons;
-     $dsql="insert into outpatient_visist_record values(0,'$date','$pat_id','$pat_name','$diag','$pro','$plan','')";
-    $dsq=mysqli_query($mysqli,$dsql); 
-     $psql="insert into patient_bill values(0,'$date','$pat_id','$pat_name','$cons','$proamnt','$totbill','')";
-    $psq=mysqli_query($mysqli,$psql); 
+    // Use prepared statements for inserts
+    $dstmt = $mysqli->prepare("INSERT INTO outpatient_visist_record (date, patid, name, diagnosis, proceedure, plan, doc_incharge) VALUES (?, ?, ?, ?, ?, ?, '')");
+    if ($dstmt) {
+        $dstmt->bind_param('sissss', $date, $pat_id, $pat_name, $diag, $pro, $plan);
+        $dstmt->execute();
+        $dstmt->close();
+    }
+
+    $pstmt = $mysqli->prepare("INSERT INTO patient_bill (date, patid, name, const, proceedure, total, doc_incharge) VALUES (?, ?, ?, ?, ?, ?, '')");
+    if ($pstmt) {
+        $pstmt->bind_param('sissds', $date, $pat_id, $pat_name, $cons, $proamnt, $totbill);
+        $pstmt->execute();
+        $pstmt->close();
+    }
 
      $result=mysqli_query($mysqli,"select * from drug_prescription where date='$date' and patid='$pat_id'");
             while($reply = mysqli_fetch_array($result)){
@@ -199,8 +288,78 @@ if (!$stmt->execute()) {
                  $sql="insert into patient_drug_history values(0,'$date','$pat_id','$pat_name','$drug','$qnt','$const','$duration','$total','$totdrug','$amnt','$cate')";
                   $sq=mysqli_query($mysqli,$sql); 
 
-                   $sqll="insert into pharmacy_order values(0,'$pat_id','$pat_name','$drug','$qnt','$const','$amnt','Not Paid','$date')";
-                  $sqs=mysqli_query($mysqli,$sqll); 
+                   // Insert pharmacy order and include campus/location when available
+                   // Align with DB schema: pharmacy_order columns per hospital.sql
+                   // (`id`, `trackid`, `customer`, `drug`, `Qnt`, `const`, `amount`, `status`, `date`)
+                   $order_cols = "trackid, customer, drug, Qnt, const, amount, status, date";
+                   $order_values = array($pat_id, $pat_name, $drug, $qnt, $const, $amnt, 'Not Paid', $date);
+
+                   // Check if pharmacy_order has campus_id / pharmacy_location_id columns
+                   $order_campus_col = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
+                   $order_loc_col    = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='pharmacy_location_id'")->fetch_assoc()['cnt'] ?? 0;
+
+                   if ($order_campus_col && $campus_id) {
+                       $order_cols .= ", campus_id";
+                       $order_params .= ",?";
+                       $order_values[] = $campus_id;
+                   }
+
+                   $pharmacy_location_id_for_order = isset($_SESSION['pharmacy_location_id']) ? (int) $_SESSION['pharmacy_location_id'] : null;
+                   if ($order_loc_col && $pharmacy_location_id_for_order) {
+                       $order_cols .= ", pharmacy_location_id";
+                       $order_params .= ",?";
+                       $order_values[] = $pharmacy_location_id_for_order;
+                   }
+
+                   // Build prepared statement dynamically and bind robustly
+                   $placeholders = implode(',', array_fill(0, count($order_values), '?'));
+                   $ins_sql = "INSERT INTO pharmacy_order ($order_cols";
+                   // append optional campus/location columns
+                   if ($order_campus_col && $campus_id) {
+                       $ins_sql .= ", campus_id";
+                   }
+                   if ($order_loc_col && $pharmacy_location_id_for_order) {
+                       $ins_sql .= ", pharmacy_location_id";
+                   }
+                   $ins_sql .= ") VALUES ($placeholders";
+                   if ($order_campus_col && $campus_id) { $ins_sql .= ',?'; }
+                   if ($order_loc_col && $pharmacy_location_id_for_order) { $ins_sql .= ',?'; }
+                   $ins_sql .= ')';
+
+                   $ins_stmt = $mysqli->prepare($ins_sql);
+                   if ($ins_stmt) {
+                       // build types string and references for bind_param
+                       $types = '';
+                       $refs = array();
+                       foreach ($order_values as $k => $v) {
+                           $types .= is_int($v) ? 'i' : 's';
+                           $refs[$k] = &$order_values[$k];
+                       }
+                       if ($order_campus_col && $campus_id) {
+                           $types .= 'i';
+                           $order_values[] = $campus_id;
+                           $refs[] = &$order_values[count($order_values)-1];
+                       }
+                       if ($order_loc_col && $pharmacy_location_id_for_order) {
+                           $types .= 'i';
+                           $order_values[] = $pharmacy_location_id_for_order;
+                           $refs[] = &$order_values[count($order_values)-1];
+                       }
+                       array_unshift($refs, $types);
+                       call_user_func_array(array($ins_stmt, 'bind_param'), $refs);
+                       $ins_stmt->execute();
+                   } else {
+                       // fallback: explicit column list (safer than relying on table order)
+                       $fallback_cols = "(trackid, customer, drug, Qnt, const, amount, status, date";
+                       if ($order_campus_col && $campus_id) { $fallback_cols .= ", campus_id"; }
+                       if ($order_loc_col && $pharmacy_location_id_for_order) { $fallback_cols .= ", pharmacy_location_id"; }
+                       $fallback_cols .= ')';
+                       $sqll = "INSERT INTO pharmacy_order $fallback_cols VALUES (0,'$pat_id','$pat_name','$drug','$qnt','$const','$amnt','Not Paid','$date'";
+                       if ($order_campus_col && $campus_id) { $sqll .= "," . intval($campus_id); }
+                       if ($order_loc_col && $pharmacy_location_id_for_order) { $sqll .= "," . intval($pharmacy_location_id_for_order); }
+                       $sqll .= ')';
+                       $sqs = mysqli_query($mysqli,$sqll);
+                   }
 
                   $sdel="delete from drug_prescription where date='$date' and patid='$pat_id'";
                   $dq=mysqli_query($mysqli,$sdel);
@@ -219,18 +378,72 @@ if (!$stmt->execute()) {
 
 }
 
-function getdrugtot($mysqli, $dname, $qn) {
+function getdrugtot($mysqli, $dname, $qn, $campus_id = null) {
     $bal = 0;
     $amnt = 0; // default value
 
-    $stmt = $mysqli->prepare("SELECT amount FROM pharmacy WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))");
-    $stmt->bind_param('s', $dname);
-    $stmt->execute();
-    $stmt->bind_result($amnt);
-    $stmt->fetch();
-    $stmt->close();
+    // Doctor-selected pharmacy location (if any) takes precedence
+    $pharmacy_location_id = isset($_SESSION['pharmacy_location_id']) ? (int) $_SESSION['pharmacy_location_id'] : null;
 
-    // ✅ If no matching drug found or NULL amount, default to 0
+    // If pharmacy table exists with campus_id, prefer campus-specific amount
+    $pharm_table_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy'")->fetch_assoc()['cnt'] ?? 0;
+    $pharm_col_exists = 0;
+    $pharm_loc_col_exists = 0;
+    if ($pharm_table_exists) {
+        $pharm_col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
+        $pharm_loc_col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy' AND COLUMN_NAME='pharmacy_location_id'")->fetch_assoc()['cnt'] ?? 0;
+    }
+
+    // First preference: pharmacy_location_id if available and selected
+    if ($pharm_table_exists && $pharm_loc_col_exists && $pharmacy_location_id) {
+        $stmt = $mysqli->prepare("SELECT amount FROM pharmacy WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND pharmacy_location_id = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('si', $dname, $pharmacy_location_id);
+            $stmt->execute();
+            $stmt->bind_result($amnt);
+            $stmt->fetch();
+            $stmt->close();
+        }
+    }
+
+    // Second preference: campus_id column (legacy multi-campus model)
+    if (($amnt === 0 || $amnt === null || $amnt === '') && $pharm_table_exists && $pharm_col_exists && $campus_id) {
+        $stmt = $mysqli->prepare("SELECT amount FROM pharmacy WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND campus_id = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('si', $dname, $campus_id);
+            $stmt->execute();
+            $stmt->bind_result($amnt);
+            $stmt->fetch();
+            $stmt->close();
+        }
+    }
+
+    // Fallback within pharmacy table without any location filter
+    if (($amnt === 0 || $amnt === null || $amnt === '') && $pharm_table_exists) {
+        $stmt = $mysqli->prepare("SELECT amount FROM pharmacy WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('s', $dname);
+            $stmt->execute();
+            $stmt->bind_result($amnt);
+            $stmt->fetch();
+            $stmt->close();
+        }
+    } else {
+        // Fallback: attempt to find price in `drug` table if present
+        $drug_table_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='drug'")->fetch_assoc()['cnt'] ?? 0;
+        if ($drug_table_exists) {
+            $stmt = $mysqli->prepare("SELECT amount FROM drug WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('s', $dname);
+                $stmt->execute();
+                $stmt->bind_result($amnt);
+                $stmt->fetch();
+                $stmt->close();
+            }
+        }
+    }
+
+    // If no matching drug found or NULL amount, default to 0
     if ($amnt === null || $amnt === '') {
         $amnt = 0;
     }
@@ -372,6 +585,11 @@ elseif (strpos($pat_id, 'S') !== false) {
     $stmt = $mysqli->prepare($ret);
     $stmt->bind_param('s', $pat_id);
 }
+elseif (strpos($pat_id, 'A') !== false) {   
+    $ret = "SELECT * FROM antenatal WHERE Acode = ?";
+    $stmt = $mysqli->prepare($ret);
+    $stmt->bind_param('s', $pat_id);
+}
 elseif (strpos($pat_id, 'A') !== false) {
     $ret = "SELECT * FROM individual WHERE code = ?";
     $stmt = $mysqli->prepare($ret);
@@ -421,6 +639,8 @@ if ($stmt) {
                                         </ol>
                                     </div>
                                     <h4 class="page-title"><?php echo $surn." ".$firstname." ".$mname;?>'s Profile</h4>
+                                    <h2><?php echo getcampus($campusid,$mysqli); ?></h2>
+                               
                                 </div>
                             </div>
                         </div>
@@ -481,11 +701,11 @@ if ($stmt) {
                                         </li>
                                         <li class="nav-item">
                                             <a href="#aboutme" data-toggle="tab" aria-expanded="true" class="nav-link">
-                                               Scan Result
+                                               Scan/X-Ray Result
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a href="#timeline" data-toggle="tab" aria-expanded="false" class="nav-link active">
+                                            <a href="#timeline" data-toggle="tab" aria-expanded="true" class="nav-link active">
                                                  Vitals
                                             </a>
                                         </li>
@@ -498,13 +718,12 @@ if ($stmt) {
                                     </ul>
                                     <!--Medical History-->
 
-                                    
                                     <form method="post" enctype="multipart/form-data">
                                     <div class="tab-content">
                                         <div class="tab-pane show " id="aboutdc">
                                             <div class="col-md-12">
                                                              <div class="form-group">
-                                                              <label for="comment">Observation</label>
+                                                              <label for="comment">Plan</label>
                                                               <textarea class="form-control" id="comment" name="plan" rows="3">
                                                               </textarea>
                                                             </div>
@@ -512,75 +731,32 @@ if ($stmt) {
 
                                                         <div class="col-md-12">
                                                              <div class="form-group">
-                                                              <label for="comment">Plan</label>
-                                                              <textarea class="form-control" id="comment" name="plan" rows="3">
+                                                              <label for="comment">Observation</label>
+                                                              <textarea class="form-control" id="comment" name="observation" rows="3">
                                                               </textarea>
                                                             </div>
                                                         </div>
                                             <div class="table-responsive">
                                                 <table class="table table-borderless mb-0">
-                                                   
-                                                    <div class="row">
-                                                        <div class="col-md-3">
-                                                            <div class="form-group">
-                                                                <label for="firstname">Visit Time</label>
-                                                                <input type="text" name="visit" style="background-color: darkgrey;" value="<?php echo $time ?>"   class="form-control" id="firstname" placeholder="Enter Patient ID">
+                                                
+                                                       <div class="col-md-12">
+                                                             <div class="form-group">
+                                                              <label for="comment">Diagnosis</label>
+                                                              <textarea class="form-control" id="comment" name="diagnosis" rows="3">
+                                                              </textarea>
                                                             </div>
-                                                        </div>
-                                                        <div class="col-md-4">
-                                                            <div class="form-group">
-                                                                <label for="firstname">Select Diagnosis</label>
-                                                                   <select id="inputState" onChange="getsubmit(this.value);" required="required" name="diag" class="form-control">
-                                                            <option>Choose</option>
-                                                        <?php
-                                                            $sql = "SELECT * FROM diagnosis order by id ASC";
-                                                            $result = mysqli_query($mysqli,$sql);
-                                                            while($reply = mysqli_fetch_array($result)){
-                                                                echo "<option value=\"".$reply['name']."\">".$reply['name']."</option>";
-                                                            }
-                                                        ?>
-                                                     
-                                                    </select>
                                                             </div>
-                                                        </div>
-                                                        <div class="col-md-5">
-                                                            <div class="form-group">
-                                                                <label for="lastname">Select Procedures</label>
-                                                               <select id="inputState" required="required" onChange="getpsubmit(this.value); " name="scate"  class="form-control">
-                                                        <option>Choose</option>
-                                                         
-                                                        <?php
-                                                            $sql = "SELECT * FROM procedures order by id ASC";
-                                                            $result = mysqli_query($mysqli,$sql);
-                                                            while($reply = mysqli_fetch_array($result)){
-                                                                echo "<option value=\"".$reply['name']."\">".$reply['name']."</option>";
-                                                            }
-                                                        ?>
-                                                    </select>
+                                                        <div class="col-md-12">
+                                                             <div class="form-group">
+                                                              <label for="comment">Procedures</label>
+                                                              <textarea class="form-control" id="comment" name="procedures" rows="3">
+                                                                 </textarea>
                                                             </div>
                                                         </div> <!-- end col -->
 
 
                                                     </div> <!-- end row -->
-                                                 <div class="row">
-                                                        <div class="col-md-6">
-                                                            <div class="form-group">
-                                                                <label for="firstname">Diagnosis Box</label>
-                                                                <textarea class="form-control" id="name" name="diagbox" rows="3">
-                                                              </textarea>
-                                                            </div>
-                                                        </div>
-
-                                                        <div class="col-md-6">
-                                                            <div class="form-group">
-                                                                <label for="firstname">Procedure Box</label>
-                                                               <textarea class="form-control" id="pname" name="probox" rows="3">
-                                                              </textarea>
-                                                            </div>
-                                                        </div>
-
-                                                        
-                                                    </div>
+                                                
 
                                                     <div class="row">
                                         
@@ -650,7 +826,7 @@ if ($stmt) {
                                                             <button type="button"  class="btn btn-danger waves-effect waves-light mt-2" onclick="getsdelete();" ><i class="mdi mdi-content-save"></i>Clear Scan & Laboratory</button>
                                                             </div>
                                                         </div>
-                                                         <div class="col-md-3">
+                                                        <div class="col-md-3">
                                                              <div class="text-left">
                                                             <button type="submit" name="prdrug" class="btn btn-success waves-effect waves-light mt-2"><i class="mdi mdi-content-save"></i>Process Patient Drug</button>
                                                             </div>
@@ -658,25 +834,88 @@ if ($stmt) {
 
                                                     </div> <!-- end row -->
 
-                                                <div class="row">
-                                                    <div class="col-md-3">
+                                                    <div class="row">
+                                                    <!-- Pharmacy location selector inline with prescription fields -->
+                                                    <div class="col-md-2">
+                                                            <div class="form-group">
+                                                                <label for="pharmacy_location_select">Pharmacy Location</label>
+                                                                <?php if (!empty($pharmacy_location_name)): ?>
+                                                                    <small class="form-text text-muted">Current: <?php echo htmlspecialchars($pharmacy_location_name); ?></small>
+                                                                <?php endif; ?>
+                                                                <select id="pharmacy_location_select" name="pharmacy_location" class="form-control">
+                                                                    <option value="">-- Select --</option>
+                                                                    <?php
+                                                                    $pl_res = $mysqli->query("SELECT id, name FROM pharmacy_location ORDER BY name ASC");
+                                                                    if ($pl_res) {
+                                                                        while ($pl = $pl_res->fetch_assoc()) {
+                                                                            $selected = (!empty($pharmacy_location_id) && (int)$pharmacy_location_id === (int)$pl['id']) ? 'selected' : '';
+                                                                            echo "<option value='".intval($pl['id'])."' " . $selected . ">".htmlspecialchars($pl['name'])."</option>";
+                                                                        }
+                                                                    }
+                                                                    ?>
+                                                                </select>
+                                                                <button type="submit" name="set_pharmacy_location" formnovalidate class="btn btn-sm btn-primary mt-1">Set</button>
+                                                            </div>
+                                                        </div>
+
+                                                    <div class="col-md-2">
                                                             <div class="form-group">
                                                                 <label for="lastname">List of Drugs</label>
-                                                               <select id="name" required="required" name="drug"  class="form-control">
+                                                                <?php if (!empty($pharmacy_location_name)): ?>
+                                                                    <small class="form-text text-muted">Listing drugs from <?php echo htmlspecialchars($pharmacy_location_name); ?> pharmacy</small>
+                                                                <?php elseif (!empty($campus_label)): ?>
+                                                                    <small class="form-text text-muted">Listing drugs from <?php echo htmlspecialchars($campus_label); ?> pharmacy</small>
+                                                                <?php endif; ?>
+                                                               <select id="name" name="drug"  class="form-control">
                                                             <option>Choose</option>
                                                          
                                                                 <?php
-                                                                    $sql = "SELECT * FROM drug order by id ASC";
-                                                                    $result = mysqli_query($mysqli,$sql);
-                                                                    while($reply = mysqli_fetch_array($result)){
-                                                                        echo "<option value=\"".$reply['name']."\">".$reply['name']."</option>";
+                                                                    /* Prefer listing drugs available in the doctor's campus when the `pharmacy` table exists.
+                                                                       Fallback to `pharmacy` without campus filter or `drug` table if pharmacy is not available. */
+                                                                    $pharm_table_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy'")->fetch_assoc()['cnt'] ?? 0;
+                                                                    $pharm_col_exists = 0;
+                                                                    $pharm_loc_col_exists = 0;
+                                                                    if ($pharm_table_exists) {
+                                                                        $pharm_col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
+                                                                        $pharm_loc_col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy' AND COLUMN_NAME='pharmacy_location_id'")->fetch_assoc()['cnt'] ?? 0;
+                                                                    }
+
+                                                                    if ($pharm_table_exists && $pharm_loc_col_exists && !empty($pharmacy_location_id)) {
+                                                                        $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy WHERE pharmacy_location_id = ? ORDER BY name ASC");
+                                                                        $ps->bind_param('i', $pharmacy_location_id);
+                                                                        $ps->execute();
+                                                                        $pres = $ps->get_result();
+                                                                        while ($reply = $pres->fetch_assoc()) {
+                                                                            echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
+                                                                        }
+                                                                    } elseif ($pharm_table_exists && $pharm_col_exists && $campus_id) {
+                                                                        $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy WHERE campus_id = ? ORDER BY name ASC");
+                                                                        $ps->bind_param('i', $campus_id);
+                                                                        $ps->execute();
+                                                                        $pres = $ps->get_result();
+                                                                        while ($reply = $pres->fetch_assoc()) {
+                                                                            echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
+                                                                        }
+                                                                    } elseif ($pharm_table_exists) {
+                                                                        $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy ORDER BY name ASC");
+                                                                        $ps->execute();
+                                                                        $pres = $ps->get_result();
+                                                                        while ($reply = $pres->fetch_assoc()) {
+                                                                            echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
+                                                                        }
+                                                                    } else {
+                                                                        $sql = "SELECT * FROM drug order by id ASC";
+                                                                        $result = mysqli_query($mysqli,$sql);
+                                                                        while($reply = mysqli_fetch_array($result)){
+                                                                            echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
+                                                                        }
                                                                     }
                                                                 ?>
                                                                 </select>
-                                                            </div>
-                                                        </div> <!-- end col -->
+                                                                                                                        </div>
+                                                                                                                </div> <!-- end col -->
 
-                                                      <div class="col-md-2">
+                                                                                                            <div class="col-md-2">
                                                             <div class="form-group">
                                                                 <label for="dosage">Dosage</label>
                                                                 <input type="text" name="qnt"  class="form-control" id="firstname" placeholder="Qty">
@@ -689,7 +928,7 @@ if ($stmt) {
                                                                 <input type="text" name="const"  class="form-control" id="firstname" placeholder="Hly">
                                                             </div>
                                                     </div> 
-                                                    <div class="col-md-3">
+                                                    <div class="col-md-2">
                                                             <div class="form-group">
                                                                 <label for="firstname">Category</label>
                                                                    <select id="inputState" required="required" name="dcate"  class="form-control">

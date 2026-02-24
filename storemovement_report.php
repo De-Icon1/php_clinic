@@ -1,6 +1,21 @@
 <?php
 session_start();
 include('assets/inc/config.php');
+// Respect campus scoping when available; allow per-report override via GET `report_campus_id`
+$report_campus = isset($_GET['report_campus_id']) ? (int) $_GET['report_campus_id'] : null;
+$campus_id = $report_campus ? $report_campus : (isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null);
+function table_has_campus($mysqli, $table)
+{
+    $t = $mysqli->real_escape_string($table);
+    $q = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" . $t . "' AND COLUMN_NAME='campus_id'";
+    $r = $mysqli->query($q);
+    if ($r) {
+        $row = $r->fetch_assoc();
+        return (int) $row['cnt'] > 0;
+    }
+    return false;
+}
+$store_has_campus = table_has_campus($mysqli, 'store_stock');
 
 // ==========================
 // 🔹 1. DELETE DRUG RECORD
@@ -33,10 +48,16 @@ if (isset($_POST['genreport']) || isset($_POST['export_pdf']) || isset($_POST['e
     if (empty($datefrm) || empty($dateto)) {
         $err = "Please select both start and end dates.";
     } else {
-        // Get report data
-        $ret = "SELECT * FROM store_stock WHERE date BETWEEN ? AND ? ORDER BY date ASC, name ASC";
-        $stmt = $mysqli->prepare($ret);
-        $stmt->bind_param('ss', $datefrm, $dateto);
+        // Get report data (apply campus filter if available)
+        if ($store_has_campus && $campus_id) {
+            $ret = "SELECT * FROM store_stock WHERE date BETWEEN ? AND ? AND campus_id = ? ORDER BY date ASC, name ASC";
+            $stmt = $mysqli->prepare($ret);
+            $stmt->bind_param('ssi', $datefrm, $dateto, $campus_id);
+        } else {
+            $ret = "SELECT * FROM store_stock WHERE date BETWEEN ? AND ? ORDER BY date ASC, name ASC";
+            $stmt = $mysqli->prepare($ret);
+            $stmt->bind_param('ss', $datefrm, $dateto);
+        }
         $stmt->execute();
         $res = $stmt->get_result();
 
@@ -276,10 +297,19 @@ function storeclosingstock($date, $mysqli)
                                                 *get details of allpatients
                                                 *
                                             */
-                                                $ret="SELECT * FROM store_stock ORDER BY name ASC "; 
-                                                $stmt= $mysqli->prepare($ret) ;
-                                                $stmt->execute() ;//ok
-                                                $res=$stmt->get_result();
+                                                // Table listing (apply campus filter when present)
+                                                if ($store_has_campus && $campus_id) {
+                                                    $ret = "SELECT * FROM store_stock WHERE campus_id = ? ORDER BY name ASC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('i', $campus_id);
+                                                    $stmt->execute();
+                                                    $res = $stmt->get_result();
+                                                } else {
+                                                    $ret = "SELECT * FROM store_stock ORDER BY name ASC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->execute();
+                                                    $res = $stmt->get_result();
+                                                }
                                                 $cnt=1;
                                                 while($row=$res->fetch_object())
                                                 {

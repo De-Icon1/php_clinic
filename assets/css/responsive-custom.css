@@ -1,0 +1,173 @@
+/* Custom Responsive Styles for Hospital Management System */
+
+/* Ensure all tables are scrollable on mobile */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile-first form adjustments */
+@media (max-width: 767px) {
+    /* Stack form groups vertically on mobile */
+    .form-row > .form-group,
+    .form-row > [class*="col-"] {
+        flex: 0 0 100%;
+        max-width: 100%;
+        margin-bottom: 1rem;
+    }
+
+    /* Ensure buttons stack properly */
+    .btn {
+        display: block;
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+
+    .btn-group .btn {
+        display: inline-block;
+        width: auto;
+    }
+
+    /* Make cards more compact on mobile */
+    .card-body {
+        padding: 1rem;
+    }
+
+    /* Adjust page title */
+    .page-title {
+        font-size: 1.25rem;
+    }
+
+    /* Make datatable controls stack */
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_length {
+        text-align: left;
+        margin-bottom: 1rem;
+    }
+
+    /* Improve modal display on mobile */
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+
+    /* Make dashboard widgets stack */
+    .widget-rounded-circle {
+        margin-bottom: 1rem;
+    }
+
+    /* Adjust sidebar for mobile */
+    .left-side-menu {
+        position: fixed;
+        z-index: 1050;
+    }
+}
+
+/* Tablet adjustments */
+@media (min-width: 768px) and (max-width: 991px) {
+    .form-group.col-md-4,
+    .form-group.col-md-3 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
+
+/* Ensure images are responsive */
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Constrain header logos to a reasonable size and preserve aspect ratio */
+.logo-box img,
+.logo-box .logo-lg img,
+.logo-box .logo-sm img {
+    max-height: 48px;
+    height: auto;
+    width: auto;
+    display: inline-block;
+}
+
+/* Stronger constraints and alignment for header logos (OOU emblem + site logo) */
+.logo-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.logo-box .logo-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.logo-box .logo-lg img {
+    max-height: 36px !important;
+    height: auto !important;
+    width: auto !important;
+    vertical-align: middle;
+}
+.logo-box .logo-sm img {
+    max-height: 28px !important;
+}
+
+/* Prevent the logo from overflowing the sidebar area */
+.left-side-menu .logo-box,
+.navbar-custom .logo-box {
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Make sure overflow content doesn't break layout */
+.content-page {
+    overflow-x: hidden;
+}
+
+/* Responsive navigation improvements */
+@media (max-width: 991px) {
+    .navbar-custom {
+        padding: 0.5rem 1rem;
+    }
+
+    .navbar-custom .navbar-nav {
+        flex-direction: column;
+    }
+}
+
+/* Print styles */
+@media print {
+    .left-side-menu,
+    .navbar-custom,
+    .btn,
+    .no-print {
+        display: none !important;
+    }
+
+    .content-page {
+        margin-left: 0 !important;
+        padding: 0 !important;
+    }
+
+    .table {
+        font-size: 10px;
+    }
+}
+
+/* Improve select dropdowns on mobile */
+select.form-control {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* Touch-friendly sizing for mobile */
+@media (max-width: 767px) {
+    .form-control,
+    .btn {
+        min-height: 44px;
+        padding: 0.75rem;
+    }
+
+    /* Larger tap targets for links */
+    a {
+        min-height: 44px;
+        display: inline-block;
+    }
+}

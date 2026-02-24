@@ -1,6 +1,21 @@
 <?php
 session_start();
 include('assets/inc/config.php');
+// campus scoping (session) — allow per-report override via POST `report_campus_id`
+$report_campus = isset($_POST['report_campus_id']) ? (int)$_POST['report_campus_id'] : null;
+$campus_id = $report_campus ? $report_campus : (isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null);
+function table_has_campus($mysqli, $table)
+{
+    $t = $mysqli->real_escape_string($table);
+    $q = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" . $t . "' AND COLUMN_NAME='campus_id'";
+    $r = $mysqli->query($q);
+    if ($r) {
+        $row = $r->fetch_assoc();
+        return (int) $row['cnt'] > 0;
+    }
+    return false;
+}
+$store_has_campus = table_has_campus($mysqli, 'store_stock');
 
 // ==========================
 // 🔹 1. DELETE DRUG RECORD
@@ -33,10 +48,16 @@ if (isset($_POST['genreport']) || isset($_POST['export_pdf']) || isset($_POST['e
     if (empty($datefrm) || empty($dateto)) {
         $err = "Please select both start and end dates.";
     } else {
-        // Get report data
-        $ret = "SELECT * FROM store_stock WHERE date BETWEEN ? AND ? ORDER BY date ASC, name ASC";
-        $stmt = $mysqli->prepare($ret);
-        $stmt->bind_param('ss', $datefrm, $dateto);
+        // Get report data (apply campus filter if available)
+        if ($store_has_campus && $campus_id) {
+            $ret = "SELECT * FROM store_stock WHERE date BETWEEN ? AND ? AND campus_id = ? ORDER BY date ASC, name ASC";
+            $stmt = $mysqli->prepare($ret);
+            $stmt->bind_param('ssi', $datefrm, $dateto, $campus_id);
+        } else {
+            $ret = "SELECT * FROM store_stock WHERE date BETWEEN ? AND ? ORDER BY date ASC, name ASC";
+            $stmt = $mysqli->prepare($ret);
+            $stmt->bind_param('ss', $datefrm, $dateto);
+        }
         $stmt->execute();
         $res = $stmt->get_result();
 
@@ -211,6 +232,44 @@ function storeclosingstock($date, $mysqli)
                                     <div class="card-body">
 
                                         <!--Add Patient Form-->
+                                        <?php
+                                        // campus selector for pharmacy report
+                                        if (isset($mysqli)) {
+                                            $campuses = [];
+                                            $candidateTables = ['campus_locations','campuses','locations','his_campus'];
+                                            foreach ($candidateTables as $ct) {
+                                                $q = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" . $mysqli->real_escape_string($ct) . "'";
+                                                $r = $mysqli->query($q);
+                                                if ($r && (int)$r->fetch_assoc()['cnt'] > 0) {
+                                                    $cols = [];
+                                                    $colRes = $mysqli->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" . $mysqli->real_escape_string($ct) . "'");
+                                                    if ($colRes) { while ($c = $colRes->fetch_assoc()) { $cols[] = $c['COLUMN_NAME']; } }
+                                                    $labelCols = ['name','title','campus_name','campus','location','site'];
+                                                    $label = null; foreach ($labelCols as $lc) { if (in_array($lc,$cols)) { $label=$lc; break; } }
+                                                    if ($label) { $safeLabel = $mysqli->real_escape_string($label); $res = $mysqli->query("SELECT id, `".$safeLabel."` AS name FROM " . $ct . " ORDER BY `".$safeLabel."` ASC"); }
+                                                    else { $res = $mysqli->query("SELECT id FROM " . $ct); }
+                                                    if ($res) { while ($row=$res->fetch_assoc()) { $campuses[] = ['id'=>$row['id'],'name'=> isset($row['name'])? $row['name']: 'Campus '. $row['id'] ]; } }
+                                                    break;
+                                                }
+                                            }
+                                            if (empty($campuses)) {
+                                                $seen=[]; $tables=['pharmacy','store_stock','pharmacy_stock'];
+                                                foreach($tables as $t){ $q = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" . $mysqli->real_escape_string($t) . "' AND COLUMN_NAME='campus_id'"; $r=$mysqli->query($q); if($r && (int)$r->fetch_assoc()['cnt']>0){ $res=$mysqli->query("SELECT DISTINCT campus_id FROM " . $t . " WHERE campus_id IS NOT NULL ORDER BY campus_id ASC"); if($res){ while($row=$res->fetch_assoc()){ $id=(int)$row['campus_id']; if($id && !in_array($id,$seen)){ $seen[]=$id; $campuses[]=['id'=>$id,'name'=>'Campus '.$id]; } } } } }
+                                            }
+                                            if (!empty($campuses)){
+                                                $sel = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : 0;
+                                                echo '<div style="margin-bottom:10px;"><label>Campus</label><select id="campus_select" class="form-control" style="max-width:240px;">';
+                                                echo '<option value="0"'.($sel===0?' selected':'').'>All campuses</option>';
+                                                foreach($campuses as $c){ $s = ($sel===(int)$c['id'])? ' selected': ''; echo '<option value="'.htmlspecialchars($c['id']).'"'.$s.'>'.htmlspecialchars($c['name']).'</option>'; }
+                                                echo '</select></div>';
+                                                ?>
+                                                <script>
+                                                (function(){var sel=document.getElementById('campus_select'); if(!sel) return; sel.addEventListener('change',function(){ var fd=new FormData(); fd.append('campus_id', this.value); fetch('assets/inc/set_campus.php',{method:'POST',body:fd}).then(r=>r.json()).then(j=>{ if(j.success) location.reload(); else alert('Could not set campus: '+j.msg); }).catch(()=>alert('Request failed')); });})();
+                                                </script>
+                                                <?php
+                                            }
+                                        }
+
                                         <form method="post" action="<?php $_SERVER['PHP_SELF']; ?>" enctype="multipart/form-data">
                                              <div class="form-row">
                                                 <div class="form-group col-md-4">
@@ -276,10 +335,19 @@ function storeclosingstock($date, $mysqli)
                                                 *get details of allpatients
                                                 *
                                             */
-                                                $ret="SELECT * FROM store_stock ORDER BY name ASC "; 
-                                                $stmt= $mysqli->prepare($ret) ;
-                                                $stmt->execute() ;//ok
-                                                $res=$stmt->get_result();
+                                                // Apply campus filter to store_stock listing when available
+                                                if ($store_has_campus && $campus_id) {
+                                                    $ret = "SELECT * FROM store_stock WHERE campus_id = ? ORDER BY name ASC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('i', $campus_id);
+                                                    $stmt->execute();
+                                                    $res = $stmt->get_result();
+                                                } else {
+                                                    $ret = "SELECT * FROM store_stock ORDER BY name ASC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->execute();
+                                                    $res = $stmt->get_result();
+                                                }
                                                 $cnt=1;
                                                 while($row=$res->fetch_object())
                                                 {

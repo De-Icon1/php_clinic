@@ -4,6 +4,23 @@
 	include('assets/inc/config.php');
     include('assets/inc/functions.php');
 
+// Ensure new columns exist: `tabs_per_sachet`
+// If the column is missing, try to add it so the UI can store per-sachet counts.
+$colCheck = $mysqli->query("SHOW COLUMNS FROM drug LIKE 'tabs_per_sachet'");
+if (!$colCheck || $colCheck->num_rows == 0) {
+    // Attempt to add the column (non-blocking)
+    @$mysqli->query("ALTER TABLE drug ADD COLUMN tabs_per_sachet INT DEFAULT 0");
+}
+// Ensure supplier and lpo ref columns exist
+$colCheck2 = $mysqli->query("SHOW COLUMNS FROM drug LIKE 'supplier_name'");
+if (!$colCheck2 || $colCheck2->num_rows == 0) {
+    @ $mysqli->query("ALTER TABLE drug ADD COLUMN supplier_name VARCHAR(255) DEFAULT NULL");
+}
+$colCheck3 = $mysqli->query("SHOW COLUMNS FROM drug LIKE 'lpo_ref'");
+if (!$colCheck3 || $colCheck3->num_rows == 0) {
+    @ $mysqli->query("ALTER TABLE drug ADD COLUMN lpo_ref VARCHAR(100) DEFAULT NULL");
+}
+
 
 /* ======================================================
    DELETE DRUG
@@ -41,10 +58,13 @@ if (isset($_POST['drug'])) {
     $qnt = trim($_POST['qnt']);
     $amount = trim($_POST['amount']);
     $cate = trim($_POST['cate']);
+    $tabs_per_sachet = isset($_POST['tabs_per_sachet']) ? (int) trim($_POST['tabs_per_sachet']) : 0;
+    $supplier_name = isset($_POST['supplier_name']) ? trim($_POST['supplier_name']) : null;
+    $lpo_ref = isset($_POST['lpo_ref']) ? trim($_POST['lpo_ref']) : null;
 
-    $query = "INSERT INTO drug(name, quantity, amount, category) VALUES(?, ?, ?, ?)";
+    $query = "INSERT INTO drug(name, quantity, amount, category, tabs_per_sachet, supplier_name, lpo_ref) VALUES(?, ?, ?, ?, ?, ?, ?)";
     $stmt = $mysqli->prepare($query);
-    $stmt->bind_param('ssss', $name, $qnt, $amount, $cate);
+    $stmt->bind_param('ssssiss', $name, $qnt, $amount, $cate, $tabs_per_sachet, $supplier_name, $lpo_ref);
     $stmt->execute();
 
     if ($stmt->affected_rows > 0) {
@@ -72,11 +92,13 @@ if (isset($_POST['upload_csv'])) {
                 $qnt = trim($data[1]);
                 $amount = trim($data[2]);
                 $cate = trim($data[3]);
-
-                $query = "INSERT INTO drug(name, quantity, amount, category) VALUES (?, ?, ?, ?)";
+                $tabs_per_sachet = isset($data[4]) ? (int) trim($data[4]) : 0;
+                $supplier_name = isset($data[5]) ? trim($data[5]) : null;
+                $lpo_ref = isset($data[6]) ? trim($data[6]) : null;
+                $query = "INSERT INTO drug(name, quantity, amount, category, tabs_per_sachet, supplier_name, lpo_ref) VALUES (?, ?, ?, ?, ?, ?, ?)";
                 $stmt = $mysqli->prepare($query);
                 if ($stmt) {
-                    $stmt->bind_param('ssss', $name, $qnt, $amount, $cate);
+                    $stmt->bind_param('ssssiss', $name, $qnt, $amount, $cate, $tabs_per_sachet, $supplier_name, $lpo_ref);
                     $stmt->execute();
                     if ($stmt->affected_rows > 0) {
                         $inserted++;
@@ -246,7 +268,7 @@ function getdrug($mysqli)
                                              <div class="form-row">
                                                 <div class="form-group col-md-3">
                                                     <label for="inputCity" class="col-form-label"><h3>Drug Name</h3></label>
-                                                    <input required="required" type="text" style="color:blue; font-size:medium;"  name="name"placeholder="Enter Scan Name" disable class="form-control" id="inputCity">
+                                                    <input required="required" type="text" style="color:blue; font-size:medium;"  name="name"placeholder="Enter Drug Name" disable class="form-control" id="inputCity">
                                                 </div>
                                                 <div class="form-group col-md-3">
                                                     <label for="inputState" class="col-form-label"><h3>Select Drug Category</h3></label>
@@ -267,6 +289,20 @@ function getdrug($mysqli)
                                                 <div class="form-group col-md-3">
                                                     <label for="inputEmail4" class="col-form-label"><h3>Drug Amount</h3></label>
                                                     <input type="text" style="color:red;font-size:medium;" required="required" name="amount" class="form-control" id="inputEmail4" placeholder="Enter Amount">
+                                                </div>
+
+                                                <div class="form-group col-md-3">
+                                                    <label for="tabsSatchet" class="col-form-label"><h3>Tabs per Satchet</h3></label>
+                                                    <input type="number" min="0" step="1" style="color:green;font-size:medium;" name="tabs_per_sachet" class="form-control" id="tabsSatchet" placeholder="e.g. 10">
+                                                </div>
+                                                <div class="form-group col-md-3">
+                                                    <label for="supplierName" class="col-form-label"><h3>Supplier Name</h3></label>
+                                                    <input type="text" style="color:purple;font-size:medium;" name="supplier_name" class="form-control" id="supplierName" placeholder="Supplier Name (optional)">
+                                                </div>
+
+                                                <div class="form-group col-md-3">
+                                                    <label for="lpoRef" class="col-form-label"><h3>Reference / LPO No.</h3></label>
+                                                    <input type="text" style="color:purple;font-size:medium;" name="lpo_ref" class="form-control" id="lpoRef" placeholder="Ref / LPO (optional)">
                                                 </div>
                                                 
                                             </div>
@@ -367,7 +403,10 @@ function getdrug($mysqli)
                                               
                                                 <th data-hide="phone" style="color:white;">Drug Name</th>
                                                 <th data-hide="phone" style="color:white;">Drug Category</th>
-                                                <th data-hide="phone" style="color:white;">Drug Quantity</th>
+                                                <th data-hide="phone" style="color:white;">Drug Quantity (Tabs)</th>
+                                                <th data-hide="phone" style="color:white;">Drug Quantity (Sachets)</th>
+                                                <th data-hide="phone" style="color:white;">Supplier</th>
+                                                <th data-hide="phone" style="color:white;">Reference / LPO</th>
                                                 <th data-hide="phone" style="color:white;">Drug Amount</th>
                                                 
                                                 <th data-hide="phone" style="color:white;">Action</th>
@@ -392,7 +431,15 @@ function getdrug($mysqli)
                                                     <td><?php echo $row->id;?></td>
                                                     <td><?php echo $row->name;?></td>
                                                     <td><?php echo $row->category;?></td>
-                                                    <td><?php echo $row->quantity;?></td>
+                                                    <?php
+                                                        $qty_tabs = (int) $row->quantity;
+                                                        $tabs_per = isset($row->tabs_per_sachet) ? (int) $row->tabs_per_sachet : 0;
+                                                        $qty_sachets = ($tabs_per > 0) ? floor($qty_tabs / $tabs_per) : 0;
+                                                    ?>
+                                                    <td><?php echo $qty_tabs;?> Tabs</td>
+                                                    <td><?php echo $qty_sachets;?> Sachets<?php echo ($tabs_per>0)?" (1 satchet={$tabs_per} tabs)":"";?></td>
+                                                    <td><?php echo htmlspecialchars($row->supplier_name);?></td>
+                                                    <td><?php echo htmlspecialchars($row->lpo_ref);?></td>
                                                     <td><?php echo $row->amount;?></td>
                                                     
 

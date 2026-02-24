@@ -1,6 +1,14 @@
 <?php
 	session_start();
 	include('assets/inc/config.php');
+
+    // Determine if patients table supports campus_id and read current user's campus
+    $patient_has_campus = 0;
+    $campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
+    $row = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='his_patients' AND COLUMN_NAME='campus_id'");
+    if ($row) {
+        $patient_has_campus = (int) $row->fetch_assoc()['cnt'];
+    }
 		if(isset($_POST['add_patient']))
 		{
 			$pat_fname=$_POST['pat_fname'];
@@ -12,10 +20,16 @@
             $pat_age = $_POST['pat_age'];
             $pat_dob = $_POST['pat_dob'];
             $pat_ailment = $_POST['pat_ailment'];
-            //sql to insert captured values
-			$query="insert into his_patients (pat_fname, pat_ailment, pat_lname, pat_age, pat_dob, pat_number, pat_phone, pat_type, pat_addr) values(?,?,?,?,?,?,?,?,?)";
-			$stmt = $mysqli->prepare($query);
-			$rc=$stmt->bind_param('sssssssss', $pat_fname, $pat_ailment, $pat_lname, $pat_age, $pat_dob, $pat_number, $pat_phone, $pat_type, $pat_addr);
+            //sql to insert captured values; include campus_id when the column exists
+            if ($patient_has_campus && $campus_id) {
+                $query="INSERT INTO his_patients (pat_fname, pat_ailment, pat_lname, pat_age, pat_dob, pat_number, pat_phone, pat_type, pat_addr, campus_id) VALUES (?,?,?,?,?,?,?,?,?,?)";
+                $stmt = $mysqli->prepare($query);
+                $rc = $stmt->bind_param('sssssssssi', $pat_fname, $pat_ailment, $pat_lname, $pat_age, $pat_dob, $pat_number, $pat_phone, $pat_type, $pat_addr, $campus_id);
+            } else {
+                $query="INSERT INTO his_patients (pat_fname, pat_ailment, pat_lname, pat_age, pat_dob, pat_number, pat_phone, pat_type, pat_addr) VALUES (?,?,?,?,?,?,?,?,?)";
+                $stmt = $mysqli->prepare($query);
+                $rc = $stmt->bind_param('sssssssss', $pat_fname, $pat_ailment, $pat_lname, $pat_age, $pat_dob, $pat_number, $pat_phone, $pat_type, $pat_addr);
+            }
 			$stmt->execute();
 			/*
 			*Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts

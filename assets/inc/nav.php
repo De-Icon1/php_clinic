@@ -67,6 +67,7 @@
         <div class="logo-box">
             <a href="his_admin_dashboard.php" class="logo text-center">
                 <span class="logo-lg">
+                    <img src="assets/images/OOU.png" alt="OOU Logo" height="18">
                     <img src="assets/images/logo-light.png" alt="" height="18">
                     <!-- <span class="logo-lg-text-light">UBold</span> -->
                 </span>

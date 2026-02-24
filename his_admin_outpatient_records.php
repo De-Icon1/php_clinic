@@ -88,12 +88,19 @@
                                             </thead>
                                             <?php
                                             /*
-                                                *get details of allpatients
-                                                *
-                                            */
-                                                $ret="SELECT * FROM  his_patients WHERE pat_type = 'OutPatient' ORDER BY RAND() "; 
-                                                //sql code to get to ten docs  randomly
-                                                $stmt= $mysqli->prepare($ret) ;
+                                                *get details of all out-patients, scoped by campus when available
+                                                */
+                                                $campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
+                                                $whereCampus = '';
+                                                if ($campus_id) {
+                                                    $row = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='his_patients' AND COLUMN_NAME='campus_id'");
+                                                    $hasCampusCol = $row ? (int) $row->fetch_assoc()['cnt'] : 0;
+                                                    if ($hasCampusCol) {
+                                                        $whereCampus = " AND campus_id = " . (int) $campus_id;
+                                                    }
+                                                }
+                                                $ret = "SELECT * FROM his_patients WHERE pat_type = 'OutPatient'" . $whereCampus . " ORDER BY RAND()"; 
+                                                $stmt = $mysqli->prepare($ret) ;
                                                 $stmt->execute() ;//ok
                                                 $res=$stmt->get_result();
                                                 $cnt=1;

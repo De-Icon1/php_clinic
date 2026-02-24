@@ -1,14 +1,18 @@
 <?php
-    $doc_id = $_SESSION['doc_id'];
-    $doc_number = $_SESSION['doc_number'];
-    $ret="SELECT * FROM  his_docs WHERE doc_id = ? AND doc_number = ?";
-    $stmt= $mysqli->prepare($ret);
-    $stmt->bind_param('is',$doc_id, $doc_number);
-    $stmt->execute() ;//ok
-    $res=$stmt->get_result();
-    //$cnt=1;
-    while($row=$res->fetch_object())
-    {
+    // Check if session variables exist before accessing them
+    $doc_id = isset($_SESSION['doc_id']) ? $_SESSION['doc_id'] : null;
+    $doc_number = isset($_SESSION['doc_number']) ? $_SESSION['doc_number'] : null;
+    
+    // Only query if session variables are set
+    if ($doc_id && $doc_number) {
+        $ret="SELECT * FROM  his_docs WHERE doc_id = ? AND doc_number = ?";
+        $stmt= $mysqli->prepare($ret);
+        $stmt->bind_param('is',$doc_id, $doc_number);
+        $stmt->execute() ;//ok
+        $res=$stmt->get_result();
+        //$cnt=1;
+        while($row=$res->fetch_object())
+        {
 ?>
     <div class="navbar-custom">
         <ul class="list-unstyled topnav-menu float-right mb-0">
@@ -73,6 +77,7 @@
         <div class="logo-box">
             <a href="his_admin_dashboard.php" class="logo text-center">
                 <span class="logo-lg">
+                    <img src="assets/images/OOU.png" alt="OOU Logo" height="18">
                     <img src="assets/images/logo-light.png" alt="" height="18">
                     <!-- <span class="logo-lg-text-light">UBold</span> -->
                 </span>
@@ -94,4 +99,7 @@
 
         </ul>
     </div>
-<?php }?>
+<?php 
+        } // end while
+    } // end if ($doc_id && $doc_number)
+?>

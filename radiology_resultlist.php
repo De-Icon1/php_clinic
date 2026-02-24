@@ -1,0 +1,293 @@
+<!--Server side code to handle  Patient Registration-->
+<?php
+	session_start();
+	include('assets/inc/config.php');
+		if(isset($_POST['add_patient']))
+		{
+            $pat_code=$_POST['pat_code'];
+            $date=$_POST['regdate'];
+            $pat_surn=$_POST['surn'];
+			$pat_fname=$_POST['fname'];
+			$pat_lname=$_POST['lname'];
+			$pat_dob=$_POST['dob'];
+            $pat_phone=$_POST['phone'];
+            $pat_addr=$_POST['add'];
+            $pat_age = $_POST['age'];
+            $nok=$_POST['nok'];
+            $noknumber=$_POST['noknumber'];
+             $mstatus=$_POST['mstatus'];
+            $pics=$_FILES["pics"]["name"];
+
+//$dir="productimages";
+//unlink($dir.'/'.$pimage);
+
+
+                 move_uploaded_file($_FILES["pics"]["tmp_name"],"picture/".$_FILES["pics"]["name"]);
+   
+			$query="insert into individual(surname,firstname,middlename,code,reg_date,dob,age,address,phone,nok,nok_contact,marrital,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?)";
+			$stmt = $mysqli->prepare($query);
+			$rc=$stmt->bind_param('sssssssssssss',$pat_surn,$pat_fname, $pat_lname,$pat_code,$date, $pat_dob, $pat_age, $pat_addr,$pat_phone, $nok, $noknumber,$mstatus,$pics);
+			$stmt->execute();
+			/*
+			*Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
+			*echo"<script>alert('Successfully Created Account Proceed To Log In ');</script>";
+			*/ 
+			//declare a varible which will be passed to alert function
+			if($stmt)
+			{
+				$success = "Individual Registration Successful";
+			}
+			else {
+				$err = "Please Try Again Or Try Later";
+			}
+			
+			
+		}
+
+
+        $ind="IND"."4".rand(0,7729); 
+?>
+<!--End Server Side-->
+<!--End Patient Registration-->
+<!DOCTYPE html>
+<html lang="en">
+    
+    <!--Head-->
+    <?php include('assets/inc/head.php');?>
+    <body>
+
+        <!-- Begin page -->
+        <div id="wrapper">
+
+            <!-- Topbar Start -->
+            <?php include("assets/inc/nav_n.php");?>
+            <!-- end Topbar -->
+
+            <!-- ========== Left Sidebar Start ========== -->
+            <?php include("assets/inc/slidebar_radiology.php");?>
+            <!-- Left Sidebar End -->
+
+            <!-- ============================================================== -->
+            <!-- Start Page Content here -->
+            <!-- ============================================================== -->
+
+            <div class="content-page">
+                <div class="content">
+
+                    <!-- Start Content-->
+                    <div class="container-fluid">
+                        
+                        <!-- start page title -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="page-title-box">
+                                    <div class="page-title-right">
+                                        <ol class="breadcrumb m-0">
+                                            <li class="breadcrumb-item"><a href="record_dashboard.php">Dashboard</a></li>
+                                            <li class="breadcrumb-item"><a href="javascript: void(0);">Patients</a></li>
+                                            <li class="breadcrumb-item active">Add Patient</li>
+                                        </ol>
+                                    </div>
+                                    <h4 class="page-title">PATIENT SCAN RESULT LIST</h4>
+                                </div>
+                            </div>
+                        </div>     
+                        <!-- end page title --> 
+                        <!-- Form row -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-body">
+                                       
+                                        <!--Add Patient Form-->
+                                       
+                                        <!--End Patient Form-->
+
+
+<div class="row">
+                            <div class="col-12">
+                                <div class="card-box">
+                                    <h4 class="header-title">List of Patients Waiting For Result </h4>
+                                    <div class="mb-2">
+                                        <div class="row">
+                                            <div class="col-12 text-sm-center form-inline" >
+                                                <div class="form-group mr-2" style="display:none">
+                                                    <select id="demo-foo-filter-status" class="custom-select custom-select-sm">
+                                                        <option value="">Show all</option>
+                                                        <option value="Discharged">Discharged</option>
+                                                        <option value="OutPatients">OutPatients</option>
+                                                        <option value="InPatients">InPatients</option>
+                                                    </select>
+                                                </div>
+                                               
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    
+                                    <div class="table-responsive">
+                                        <table id="demo-foo-filtering" style="background-color:grey;" class="datatable-1 table table-bordered table-striped   display" data-page-size="7">
+                                            <thead>
+                                            <tr>
+                                                <th style="color:white;">S/N</th>
+                                                 <th data-hide="phone" style="color:white;">Test Date</th>
+                                                <th data-hide="phone" style="color:white;">Patient ID</th>
+                                                <th data-hide="phone" style="color:white;">Fullname</th>
+                                                <th data-hide="phone" style="color:white;">Test</th>
+                                                <th data-hide="phone" style="color:white;">Result</th>
+                                                <th data-hide="phone" style="color:white;">Action</th>
+                                              
+                                                                                            </tr>
+                                            </thead>
+                                            <?php
+                                            /*
+                                                *get details of allpatients
+                                                *
+                                            */
+                                            $rdate=date('Y-m-d');
+                                            $status='Not Yet';
+                                                $ret="SELECT * FROM  patient_scan where result=''  ORDER BY id DESC "; 
+                                                $stmt= $mysqli->prepare($ret) ;
+                                                $stmt->execute() ;//ok
+                                                $res=$stmt->get_result();
+                                                $cnt=1;
+                                                while($row=$res->fetch_object())
+                                                {
+                                            ?>
+
+                                                <tbody>
+                                                <tr>
+                                                    <td><?php echo $row->id;?></td>
+                                                    <td><?php echo $row->date;?></td>
+                                                    <td><?php echo $row->code;?></td>
+                                                    <td><?php echo $row->name;?></td>
+                                                    
+                                                    <td><?php echo $row->test;?></td>
+                                                    <td style="color:red;"><?php echo "NO RESULT"; ?></td>
+                                                    <td><a href="radiology_result.php?pat_number=<?php echo $row->code;?>&test=<?php echo $row->test;?>" class="badge badge-success"><i class="far fa-eye "></i>Result</a></td>
+
+                                                    <td><a href="radiology_result.php?pat_number=<?php echo $row->code;?>&test=<?php echo $row->test;?>" class="badge badge-info"><i class="fas fa-upload"></i> Upload Image</a></td>
+
+                                                   
+                                                </tr>
+                                                </tbody>
+                                            <?php  $cnt = $cnt +1 ; }?>
+                                            <tfoot>
+                                            <tr class="active">
+                                                <td colspan="8">
+                                                    <div class="text-right">
+                                                        <ul class="pagination pagination-rounded justify-content-end footable-pagination m-t-10 mb-0"></ul>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div> <!-- end .table-responsive-->
+                                </div> <!-- end card-box -->
+                            </div> <!-- end col -->
+                        </div>
+
+                        <!-- end row -->
+
+
+
+
+                                    </div> <!-- end card-body -->
+                                </div> <!-- end card-->
+                            </div> <!-- end col -->
+                        </div>
+                        <!-- end row -->
+
+                    </div> <!-- container -->
+
+                </div> <!-- content -->
+
+                <!-- Footer Start -->
+                <?php include('assets/inc/footer.php');?>
+                <!-- end Footer -->
+
+            </div>
+
+            <!-- ============================================================== -->
+            <!-- End Page content -->
+            <!-- ============================================================== -->
+
+
+        </div>
+        <!-- END wrapper -->
+
+       
+        <!-- Right bar overlay-->
+        <div class="rightbar-overlay"></div>
+
+        <!-- Vendor js -->
+        <script src="assets/js/vendor.min.js"></script>
+
+        <!-- App js-->
+        <script src="assets/js/app.min.js"></script>
+
+        <!-- Loading buttons js -->
+        <script src="assets/libs/ladda/spin.js"></script>
+        <script src="assets/libs/ladda/ladda.js"></script>
+
+        <!-- Buttons init js-->
+        <script src="assets/js/pages/loading-btn.init.js"></script>
+         <script src="scripts/jquery-1.9.1.min.js" type="text/javascript"></script>
+  <script src="scripts/jquery-ui-1.10.1.custom.min.js" type="text/javascript"></script>
+  <script src="bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+  <script src="scripts/flot/jquery.flot.js" type="text/javascript"></script>
+  <script src="scripts/datatables/jquery.dataTables.js"></script>
+  <script>
+    $(document).ready(function() {
+      $('.datatable-1').dataTable();
+      $('.dataTables_paginate').addClass("btn-group datatable-pagination");
+      $('.dataTables_paginate > a').wrapInner('<span />');
+      $('.dataTables_paginate > a:first-child').append('<i class="icon-chevron-left shaded"></i>');
+      $('.dataTables_paginate > a:last-child').append('<i class="icon-chevron-right shaded"></i>');
+    } );
+  </script>
+  <script type="text/javascript">
+   function husbandURL(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+        $('#hpass').attr('src', e.target.result);
+       }
+        reader.readAsDataURL(input.files[0]);
+       }
+    }
+    
+function husbandwURL(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+        $('#hwpass').attr('src', e.target.result);
+       }
+        reader.readAsDataURL(input.files[0]);
+       }
+    }
+    
+ function wifeURL(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+        $('#wpa').attr('src', e.target.result);
+       }
+        reader.readAsDataURL(input.files[0]);
+       }
+    }
+ function wifewURL(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+        $('#wwpa').attr('src', e.target.result);
+       }
+        reader.readAsDataURL(input.files[0]);
+       }
+    }
+    
+
+</script>
+    </body>
+
+</html>

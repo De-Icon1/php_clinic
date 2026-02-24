@@ -96,6 +96,24 @@ elseif (strpos($ind, 'H') !== false) {
     $pic=$row->picture;
 }
 elseif (strpos($ind, 'A') !== false) {
+    $ret="SELECT * FROM antenatal where acode='$ind'"; 
+    $stmt= $mysqli->prepare($ret) ;
+    $stmt->execute() ;//ok
+    $res=$stmt->get_result();
+    $cnt=1;
+    $row=$res->fetch_object();
+    $surn=$row->surname;
+    $firstname=$row->firstname;
+    $mname=$row->middlename;
+    $phone=$row->phone;
+     $cate="ANTENATAL CARD";
+    $nok=$row->nok;
+    $nokph=$row->nok_phone;
+    $dob=$row->dob;
+    $date=$row->reg_date;
+    $pic=$row->picture;
+}
+elseif (strpos($ind, 'A') !== false) {
     $ret="SELECT * FROM individual where code='$ind'"; 
     $stmt= $mysqli->prepare($ret) ;
     $stmt->execute() ;//ok

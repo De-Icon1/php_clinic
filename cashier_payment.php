@@ -6,6 +6,27 @@
   authorize();
   $aid=$_SESSION['doc_id'];
    $doc_number = $_SESSION['doc_number'];
+   $campusid=$_SESSION['campus_id'];
+
+   function getcampus($campusid,$mysqli){
+        $sql="SELECT * FROM campus_locations where id=$campusid"; 
+       $result = mysqli_query($mysqli,$sql);
+        $num=mysqli_num_rows($result);
+        $reply = mysqli_fetch_array($result);
+        $name=$reply['name'];
+        return $name;
+    }   
+
+    // Campus-aware pharmacy_order handling
+    $campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
+    $order_has_campus = 0;
+    if ($campus_id) {
+            $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='campus_id'");
+            if ($resCol) {
+                    $rowCol = $resCol->fetch_assoc();
+                    $order_has_campus = isset($rowCol['cnt']) ? (int) $rowCol['cnt'] : 0;
+            }
+    }
 
     if(isset($_GET['del'])){
      //sql to insert captured values
@@ -24,12 +45,21 @@
             }
 }
 $gamnt=0;
-$relt="select * from pharmacy_order where trackid=''";
+// Default listing of pharmacy_order, optionally scoped by campus
+if ($order_has_campus && $campus_id) {
+    $relt = "select * from pharmacy_order where trackid='' AND campus_id=" . (int)$campus_id;
+} else {
+    $relt="select * from pharmacy_order where trackid=''";
+}
 if(isset($_GET['rel'])){
      //sql to insert captured values
     $tid=$_GET['rel'];
     $date=$_GET['date'];
-    $relt="select * from pharmacy_order where trackid='$tid' and date='$date'";
+    if ($order_has_campus && $campus_id) {
+        $relt="select * from pharmacy_order where trackid='$tid' and date='$date' AND campus_id=" . (int)$campus_id;
+    } else {
+        $relt="select * from pharmacy_order where trackid='$tid' and date='$date'";
+    }
     $gamnt=getphartot($mysqli,$date,$tid);
 }
 
@@ -81,7 +111,21 @@ if(isset($_GET['dels'])){
 
 function getphartot($mysqli,$date,$tid){
             $bal=0;
-            $result=mysqli_query($mysqli,"select * from pharmacy_order where trackid='$tid' and date='$date'");
+            $campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
+            $order_has_campus = 0;
+            if ($campus_id) {
+                $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='campus_id'");
+                if ($resCol) {
+                    $rowCol = $resCol->fetch_assoc();
+                    $order_has_campus = isset($rowCol['cnt']) ? (int) $rowCol['cnt'] : 0;
+                }
+            }
+            if ($order_has_campus && $campus_id) {
+                $sql = "select * from pharmacy_order where trackid='$tid' and date='$date' and campus_id=" . (int)$campus_id;
+            } else {
+                $sql = "select * from pharmacy_order where trackid='$tid' and date='$date'";
+            }
+            $result=mysqli_query($mysqli,$sql);
             while($reply = mysqli_fetch_array($result)){
                 $amnt=$reply['amount'];
                 $bal+=$amnt;

@@ -283,32 +283,65 @@
                                                 $stmt->execute() ;//ok
                                                 $res=$stmt->get_result();
                                                 $cnt=1;
-                                                while($row=$res->fetch_object())
-                                                {
                                             ?>
                                             <tbody>
+                                            <?php while($row=$res->fetch_object()) { ?>
                                                 <tr>
                                                     <td style="width: 36px;">
                                                         <img src="../doc/assets/images/users/<?php echo $row->doc_dpic;?>" alt="img" title="contact-img" class="rounded-circle avatar-sm" />
                                                     </td>
-                                                    <td>
-                                                    </td>
-                                                    <td>
-                                                        <?php echo $row->doc_fname;?> <?php echo $row->doc_lname;?>
-                                                    </td>    
-                                                    <td>
-                                                        <?php echo $row->doc_email;?>
-                                                    </td>
-                                                    <td>
-                                                        <?php echo $row->doc_dept;?>
-                                                    </td>
+                                                    <td></td>
+                                                    <td><?php echo $row->doc_fname;?> <?php echo $row->doc_lname;?></td>
+                                                    <td><?php echo $row->doc_email;?></td>
+                                                    <td><?php echo $row->doc_dept;?></td>
                                                     <td>
                                                         <a href="his_admin_view_single_employee.php?doc_id=<?php echo $row->doc_id;?>&&doc_number=<?php echo $row->doc_number;?>" class="btn btn-xs btn-primary"><i class="mdi mdi-eye"></i> View</a>
-                                                    </td>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+                                                    </td>
                                                 </tr>
+                                            <?php } ?>
                                             </tbody>
-                                            <?php }?>
                                         </table>
+                                    </div>
+                                </div>
+                            </div> <!-- end col -->
+                        </div>
+
+                        <!-- Reports Quick Links -->
+                        <div class="row">
+                            <div class="col-xl-12">
+                                <div class="card-box">
+                                    <h4 class="header-title mb-3">Reports</h4>
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <a class="btn btn-outline-secondary btn-block" href="total_registered.php">Total Registered Patient</a>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <a class="btn btn-outline-secondary btn-block" href="current_admitted.php">Current Admitted Patient</a>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <a class="btn btn-outline-secondary btn-block" href="visitdate.php">Today's Visit Report</a>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <a class="btn btn-outline-secondary btn-block" href="storeview_report.php">Drug Movement Report</a>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-3">
+                                        <div class="col-md-3">
+                                            <a class="btn btn-outline-secondary btn-block" href="dailystock.php">Daily Stock Report</a>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <a class="btn btn-outline-secondary btn-block" href="pharmacy_report.php">Pharmacy Sales Report</a>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <a class="btn btn-outline-secondary btn-block" href="storestockview_report.php">Store Stock View</a>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <a class="btn btn-outline-secondary btn-block" href="stock_report.php">Stock Report</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                                     </div>
                                 </div>
                             </div> <!-- end col -->                                                                                                                                                                                                                                         

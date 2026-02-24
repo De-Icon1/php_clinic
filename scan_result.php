@@ -198,13 +198,49 @@ elseif (strpos($ind, 'A') !== false) {
 
                                                     <div class="form-group col-md-12">
                                                         <label for="inputPassword4" class="col-form-label">Test Result</label>
-                                                        <textarea class="form-control" id="sname" name="result" rows="9">
-                                                              </textarea>
+                                                            <textarea class="form-control" id="sname" name="result" rows="9">
+                                                                  </textarea>
                                                     </div>
 
                                                     
                                                 </div>
 
+                                                   <!-- Upload image for this patient/test -->
+                                                   <hr>
+                                                   <div class="form-row">
+                                                       <div class="form-group col-md-4">
+                                                           <label>Upload X-ray / PDF</label>
+                                                           <form method="post" action="scripts/upload_scan_image.php" enctype="multipart/form-data">
+                                                               <?php
+                                                                   // try to find scan id by test name
+                                                                   $scanId = 0;
+                                                                   $scanStmt = $mysqli->prepare("SELECT id FROM scan WHERE name = ? LIMIT 1");
+                                                                   if ($scanStmt) {
+                                                                       $scanStmt->bind_param('s', $test);
+                                                                       $scanStmt->execute();
+                                                                       $scanStmt->bind_result($scanIdTmp);
+                                                                       if ($scanStmt->fetch()) { $scanId = (int)$scanIdTmp; }
+                                                                       $scanStmt->close();
+                                                                   }
+                                                               ?>
+                                                               <input type="hidden" name="patient_code" value="<?php echo htmlspecialchars($pat_number); ?>">
+                                                               <input type="hidden" name="test_name" value="<?php echo htmlspecialchars($test); ?>">
+                                                               <input type="hidden" name="scan_id" value="<?php echo $scanId; ?>">
+                                                               <div class="mb-2">
+                                                                   <select name="department" class="form-control">
+                                                                       <option value="">Send to (optional)</option>
+                                                                       <option value="Doctor Unit">Doctor Unit</option>
+                                                                       <option value="Nursing">Nursing</option>
+                                                                       <option value="Billing">Billing</option>
+                                                                   </select>
+                                                               </div>
+                                                               <div class="mb-2">
+                                                                   <input type="file" name="scan_image" accept="image/*,.pdf" required class="form-control">
+                                                               </div>
+                                                               <button type="submit" class="btn btn-info">Upload Result Image</button>
+                                                           </form>
+                                                       </div>
+                                                   </div>
                                                 <button type="submit" name="post_result" class="ladda-button btn btn-success" data-style="expand-right">Post Result</button>
 
                                             </form>

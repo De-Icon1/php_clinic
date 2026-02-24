@@ -28,7 +28,9 @@ if(isset($_GET['del'])){
 		if(isset($_POST['genreport']))
 		{
             $datefrm=$_POST['datefrom'];
-            header("location:visitdate_report.php?datefrm=$datefrm");
+            $report_campus = isset($_POST['report_campus_id']) ? (int)$_POST['report_campus_id'] : 0;
+            $camp_q = $report_campus ? "&report_campus_id={$report_campus}" : '';
+            header("location:visitdate_report.php?datefrm=$datefrm{$camp_q}");
 
 			
 		}
@@ -111,6 +113,45 @@ function getscan($mysqli){
                                     <div class="card-body">
                                        
                                         <!--Add Patient Form-->
+                                        <?php
+                                        // Campus selector for this report
+                                        if (isset($mysqli)) {
+                                            $campuses = [];
+                                            $candidateTables = ['campus_locations','campuses','locations','his_campus'];
+                                            foreach ($candidateTables as $ct) {
+                                                $q = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" . $mysqli->real_escape_string($ct) . "'";
+                                                $r = $mysqli->query($q);
+                                                if ($r && (int)$r->fetch_assoc()['cnt'] > 0) {
+                                                    $cols = [];
+                                                    $colRes = $mysqli->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" . $mysqli->real_escape_string($ct) . "'");
+                                                    if ($colRes) { while ($c = $colRes->fetch_assoc()) { $cols[] = $c['COLUMN_NAME']; } }
+                                                    $labelCols = ['name','title','campus_name','campus','location','site'];
+                                                    $label = null; foreach ($labelCols as $lc) { if (in_array($lc,$cols)) { $label=$lc; break; } }
+                                                    if ($label) { $safeLabel = $mysqli->real_escape_string($label); $res = $mysqli->query("SELECT id, `".$safeLabel."` AS name FROM " . $ct . " ORDER BY `".$safeLabel."` ASC"); }
+                                                    else { $res = $mysqli->query("SELECT id FROM " . $ct); }
+                                                    if ($res) { while ($row=$res->fetch_assoc()) { $campuses[] = ['id'=>$row['id'],'name'=> isset($row['name'])? $row['name']: 'Campus '. $row['id'] ]; } }
+                                                    break;
+                                                }
+                                            }
+                                            if (empty($campuses)) {
+                                                $seen=[]; $tables=['pharmacy','store_stock','pharmacy_stock'];
+                                                foreach($tables as $t){ $q = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='" . $mysqli->real_escape_string($t) . "' AND COLUMN_NAME='campus_id'"; $r=$mysqli->query($q); if($r && (int)$r->fetch_assoc()['cnt']>0){ $res=$mysqli->query("SELECT DISTINCT campus_id FROM " . $t . " WHERE campus_id IS NOT NULL ORDER BY campus_id ASC"); if($res){ while($row=$res->fetch_assoc()){ $id=(int)$row['campus_id']; if($id && !in_array($id,$seen)){ $seen[]=$id; $campuses[]=['id'=>$id,'name'=>'Campus '.$id]; } } } } }
+                                            }
+                                            if (!empty($campuses)){
+                                                $sel = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : 0;
+                                                echo '<div style="margin-bottom:10px;"><label>Campus</label><select id="campus_select" class="form-control" style="max-width:240px;">';
+                                                echo '<option value="0"'.($sel===0?' selected':'').'>All campuses</option>';
+                                                foreach($campuses as $c){ $s = ($sel===(int)$c['id'])? ' selected': ''; echo '<option value="'.htmlspecialchars($c['id']).'"'.$s.'>'.htmlspecialchars($c['name']).'</option>'; }
+                                                echo '</select></div>';
+                                                ?>
+                                                <script>
+                                                (function(){var sel=document.getElementById('campus_select'); if(!sel) return; sel.addEventListener('change',function(){ var fd=new FormData(); fd.append('campus_id', this.value); fetch('assets/inc/set_campus.php',{method:'POST',body:fd}).then(r=>r.json()).then(j=>{ if(j.success) location.reload(); else alert('Could not set campus: '+j.msg); }).catch(()=>alert('Request failed')); });})();
+                                                </script>
+                                                <?php
+                                            }
+                                        }
+                                        ?>
+
                                         <form method="post" action="<?php $_SERVER['PHP_SELF']; ?>" enctype="multipart/form-data">
                                              <div class="form-row">
                                                 <div class="form-group col-md-4">

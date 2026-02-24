@@ -2,7 +2,20 @@
 <?php
 	session_start();
 	include('assets/inc/config.php');
+
+$campusid=$_SESSION['campus_id'];
+  function getcampus($campusid,$mysqli){
+      $sql="SELECT * FROM campus_locations where id=$campusid"; 
+     $result = mysqli_query($mysqli,$sql);
+      $num=mysqli_num_rows($result);
+      $reply = mysqli_fetch_array($result);
+      $name=$reply['name'];
+      return $name;
+  }
+
 		if(isset($_POST['add_patient']))
+
+            
 		{
             $pat_code=$_POST['pat_code'];
             $date=$_POST['regdate'];

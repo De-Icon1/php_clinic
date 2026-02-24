@@ -16,17 +16,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $header = fgetcsv($handle); // Skip header row
 
         while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-            // Expecting: name, quantity, amount, category
-            $name = strtoupper(trim($data[0]));
-            $quantity = trim($data[1]);
-            $amount = trim($data[2]);
-            $category = trim($data[3]);
+                // Expecting: name, quantity, amount, category, tabs_per_sachet, supplier_name, lpo_ref
+                $name = strtoupper(trim(isset($data[0]) ? $data[0] : ''));
+                $quantity = trim(isset($data[1]) ? $data[1] : '0');
+                $amount = trim(isset($data[2]) ? $data[2] : '0');
+                $category = trim(isset($data[3]) ? $data[3] : '');
+                $tabs_per_sachet = isset($data[4]) ? (int) trim($data[4]) : 0;
+                $supplier_name = isset($data[5]) ? trim($data[5]) : null;
+                $lpo_ref = isset($data[6]) ? trim($data[6]) : null;
 
             // Only insert if name is not empty
             if (!empty($name)) {
-                $stmt = $mysqli->prepare("INSERT INTO drug(name, quantity, amount, category) VALUES (?, ?, ?, ?)");
+                $stmt = $mysqli->prepare("INSERT INTO drug(name, quantity, amount, category, tabs_per_sachet, supplier_name, lpo_ref) VALUES (?, ?, ?, ?, ?, ?, ?)");
                 if ($stmt) {
-                    $stmt->bind_param("ssss", $name, $quantity, $amount, $category);
+                    $stmt->bind_param("ssssiss", $name, $quantity, $amount, $category, $tabs_per_sachet, $supplier_name, $lpo_ref);
                     $stmt->execute();
                 }
             }
@@ -45,8 +48,8 @@ if (isset($_GET['download_format'])) {
     header('Content-Disposition: attachment; filename="drug_format_template.csv"');
 
     $output = fopen("php://output", "w");
-    fputcsv($output, ['name', 'quantity', 'amount', 'category']); // Header row
-    fputcsv($output, ['Paracetamol', '100', '50', 'Tab']);        // Example row
+    fputcsv($output, ['name', 'quantity', 'amount', 'category', 'tabs_per_sachet', 'supplier_name', 'lpo_ref']); // Header row
+    fputcsv($output, ['Paracetamol', '100', '50', 'Tab', '10', 'Acme Pharma Ltd', 'LPO-12345']);        // Example row
     fclose($output);
     exit();
 }

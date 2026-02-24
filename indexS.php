@@ -18,6 +18,33 @@ if(isset($_POST['nursing_login']))
         $_SESSION['doc_number'] = $doc_number; //Assign session to doc_number id
         //$uip=$_SERVER['REMOTE_ADDR'];
         //$ldate=date('d/m/Y h:i:s', time());
+        // Attach campus/location to session if available
+        $campus_id = null;
+        $col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='his_docs' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
+        if ($col_exists) {
+            $cstmt = $mysqli->prepare("SELECT campus_id FROM his_docs WHERE doc_id = ? LIMIT 1");
+            if ($cstmt) {
+                $cstmt->bind_param('i', $doc_id);
+                $cstmt->execute();
+                $cres = $cstmt->get_result();
+                if ($crow = $cres->fetch_assoc()) {
+                    $campus_id = $crow['campus_id'];
+                    if (!empty($campus_id)) {
+                        $_SESSION['campus_id'] = $campus_id;
+                        $_SESSION['working_location_id'] = $campus_id;
+                        $lstmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+                        if ($lstmt) {
+                            $lstmt->bind_param('i', $campus_id);
+                            $lstmt->execute();
+                            $lres = $lstmt->get_result();
+                            if ($lrow = $lres->fetch_assoc()) {
+                                $_SESSION['working_location'] = $lrow['name'];
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if($rs)
             {//if its sucessfull
                 header("location:nursing_dashboard.php");        

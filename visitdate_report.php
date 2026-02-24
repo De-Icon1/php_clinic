@@ -3,6 +3,10 @@
 	session_start();
 	include('assets/inc/config.php');
     $datefrm=$_GET['datefrm'];
+    // allow per-report campus override
+    $report_campus = isset($_GET['report_campus_id']) ? (int)$_GET['report_campus_id'] : null;
+    $session_campus = isset($_SESSION['campus_id']) ? (int)$_SESSION['campus_id'] : null;
+    $campus_filter = $report_campus ? $report_campus : $session_campus;
     $date=date('Y-m-d');
     pharmacyclosingstock($date,$mysqli);
     storeclosingstock($date,$mysqli);
@@ -160,10 +164,26 @@ function storeclosingstock($date,$mysqli){
                                                 *get details of allpatients
                                                 *
                                             */
-                                                $ret="SELECT * FROM sendsignal where date='$datefrm' ORDER BY id ASC "; 
-                                                $stmt= $mysqli->prepare($ret) ;
-                                                $stmt->execute() ;//ok
-                                                $res=$stmt->get_result();
+                                                // apply campus filter when available and when the column exists
+                                                $has_campus_col = false;
+                                                $colChk = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
+                                                if ($colChk) {
+                                                    $has_campus_col = ((int)$colChk->fetch_assoc()['cnt'] > 0);
+                                                }
+
+                                                if ($campus_filter && $has_campus_col) {
+                                                    $ret = "SELECT * FROM sendsignal WHERE date = ? AND campus_id = ? ORDER BY id ASC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('si', $datefrm, $campus_filter);
+                                                    $stmt->execute();
+                                                    $res = $stmt->get_result();
+                                                } else {
+                                                    $ret = "SELECT * FROM sendsignal WHERE date = ? ORDER BY id ASC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('s', $datefrm);
+                                                    $stmt->execute();
+                                                    $res = $stmt->get_result();
+                                                }
                                                 $cnt=1;
                                                 while($row=$res->fetch_object())
                                                 {

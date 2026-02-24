@@ -6,6 +6,72 @@
   authorize();
   $aid=$_SESSION['doc_id'];
    $doc_number = $_SESSION['doc_number'];
+   $campusid=$_SESSION['campus_id'];
+   
+   function getcampus($campusid,$mysqli){
+       $sql="SELECT * FROM campus_locations where id=$campusid"; 
+       $result = mysqli_query($mysqli,$sql);
+       $num=mysqli_num_rows($result);
+       $reply = mysqli_fetch_array($result);
+       $name=$reply['name'];
+       return $name;
+   }
+
+  
+  /* ============================================================
+     WORKING LOCATION HANDLING (SHARED WITH LAB CONSUMABLES MODEL)
+  =============================================================== */
+  if (isset($_POST['set_location'])) {
+      $wl = $_POST['working_location'];
+      if (is_numeric($wl)) {
+          $id = intval($wl);
+          $stmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+          if ($stmt) {
+              $stmt->bind_param('i', $id);
+              $stmt->execute();
+              $r = $stmt->get_result();
+              if ($row = $r->fetch_assoc()) {
+                  $_SESSION['working_location_id'] = $id;
+                  $_SESSION['working_location'] = $row['name'];
+              } else {
+                  $_SESSION['working_location_id'] = $id;
+                  $_SESSION['working_location'] = '';
+              }
+          }
+      } else {
+          $_SESSION['working_location'] = $wl;
+          $stmt = $mysqli->prepare("SELECT id FROM campus_locations WHERE name = ? LIMIT 1");
+          if ($stmt) {
+              $stmt->bind_param('s', $wl);
+              $stmt->execute();
+              $r = $stmt->get_result();
+              if ($row = $r->fetch_assoc()) {
+                  $_SESSION['working_location_id'] = intval($row['id']);
+              }
+          }
+      }
+      // Preserve any existing query parameters (like nurse_pick=1) on redirect
+      $qs = $_GET;
+      if (isset($qs['clear_location'])) {
+          unset($qs['clear_location']);
+      }
+      $query = http_build_query($qs);
+      $target = $_SERVER['PHP_SELF'] . ($query ? ('?' . $query) : '');
+      header('Location: ' . $target);
+      exit;
+  }
+
+  if (isset($_GET['clear_location'])) {
+      unset($_SESSION['working_location']);
+      unset($_SESSION['working_location_id']);
+      // Preserve other query parameters (like nurse_pick=1) when clearing location
+      $qs = $_GET;
+      unset($qs['clear_location']);
+      $query = http_build_query($qs);
+      $target = $_SERVER['PHP_SELF'] . ($query ? ('?' . $query) : '');
+      header('Location: ' . $target);
+      exit;
+  }
   // Determine nurse's assigned campus/location (if available).
   // Older schema may not have `campus_id` on `his_docs`. Prefer session-based `working_location`.
   $campus_id = null;
@@ -40,19 +106,29 @@
   $picked_item = null;
   if (isset($_POST['pick_consumable'])) {
       $stock_id = (int) ($_POST['stock_id'] ?? 0);
-      $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
-      if ($pst) {
-          $pst->bind_param('i', $stock_id);
-          $pst->execute();
-          $pres = $pst->get_result();
-          if ($row = $pres->fetch_assoc()) {
-              if ($campus_id && $row['campus_id'] != $campus_id) {
-                  $err = "Selected stock item does not belong to your location.";
-              } else {
+      if ($campus_id) {
+          $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? AND s.campus_id = ? LIMIT 1");
+          if ($pst) {
+              $pst->bind_param('ii', $stock_id, $campus_id);
+              $pst->execute();
+              $pres = $pst->get_result();
+              if ($row = $pres->fetch_assoc()) {
                   $picked_item = $row;
+              } else {
+                  $err = "Consumable stock ID not found for your location.";
               }
-          } else {
-              $err = "Consumable stock ID not found.";
+          }
+      } else {
+          $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
+          if ($pst) {
+              $pst->bind_param('i', $stock_id);
+              $pst->execute();
+              $pres = $pst->get_result();
+              if ($row = $pres->fetch_assoc()) {
+                  $picked_item = $row;
+              } else {
+                  $err = "Consumable stock ID not found.";
+              }
           }
       }
   }
@@ -61,22 +137,34 @@
   if (isset($_POST['ajax']) && $_POST['ajax'] === 'pick') {
       header('Content-Type: application/json');
       $stock_id = (int) ($_POST['stock_id'] ?? 0);
-      $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
-      if ($pst) {
-          $pst->bind_param('i', $stock_id);
-          $pst->execute();
-          $pres = $pst->get_result();
-          if ($row = $pres->fetch_assoc()) {
-              if ($campus_id && $row['campus_id'] != $campus_id) {
-                  echo json_encode(['success' => false, 'error' => 'Selected stock item does not belong to your location.']);
-              } else {
+      if ($campus_id) {
+          $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? AND s.campus_id = ? LIMIT 1");
+          if ($pst) {
+              $pst->bind_param('ii', $stock_id, $campus_id);
+              $pst->execute();
+              $pres = $pst->get_result();
+              if ($row = $pres->fetch_assoc()) {
                   echo json_encode(['success' => true, 'item' => $row]);
+              } else {
+                  echo json_encode(['success' => false, 'error' => 'Consumable stock ID not found for your location.']);
               }
           } else {
-              echo json_encode(['success' => false, 'error' => 'Consumable stock ID not found.']);
+              echo json_encode(['success' => false, 'error' => 'Server error preparing statement.']);
           }
       } else {
-          echo json_encode(['success' => false, 'error' => 'Server error preparing statement.']);
+          $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
+          if ($pst) {
+              $pst->bind_param('i', $stock_id);
+              $pst->execute();
+              $pres = $pst->get_result();
+              if ($row = $pres->fetch_assoc()) {
+                  echo json_encode(['success' => true, 'item' => $row]);
+              } else {
+                  echo json_encode(['success' => false, 'error' => 'Consumable stock ID not found.']);
+              }
+          } else {
+              echo json_encode(['success' => false, 'error' => 'Server error preparing statement.']);
+          }
       }
       exit();
   }
@@ -88,23 +176,31 @@
       if ($issue_qty <= 0) {
           $err = "Enter a valid quantity to issue.";
       } else {
-          $gst = $mysqli->prepare("SELECT quantity, campus_id FROM nurse_consumable_stock WHERE id = ? LIMIT 1");
-          $gst->bind_param('i', $stock_id);
+          if ($campus_id) {
+              $gst = $mysqli->prepare("SELECT quantity, campus_id FROM nurse_consumable_stock WHERE id = ? AND campus_id = ? LIMIT 1");
+              $gst->bind_param('ii', $stock_id, $campus_id);
+          } else {
+              $gst = $mysqli->prepare("SELECT quantity, campus_id FROM nurse_consumable_stock WHERE id = ? LIMIT 1");
+              $gst->bind_param('i', $stock_id);
+          }
           $gst->execute();
           $gres = $gst->get_result();
           if ($g = $gres->fetch_assoc()) {
-              if ($campus_id && $g['campus_id'] != $campus_id) {
-                  $err = "You cannot issue stock from another location.";
-              } elseif ($g['quantity'] < $issue_qty) {
+              if ($g['quantity'] < $issue_qty) {
                   $err = "Not enough stock to issue.";
               } else {
                   $upd = $mysqli->prepare("UPDATE nurse_consumable_stock SET quantity = quantity - ? WHERE id = ?");
                   $upd->bind_param('ii', $issue_qty, $stock_id);
                   $upd->execute();
                   if ($upd) $success = "Issued $issue_qty item(s) successfully.";
-                  // Refresh picked item for display
-                  $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
-                  $pst->bind_param('i', $stock_id);
+                  // Refresh picked item for display (respect campus)
+                  if ($campus_id) {
+                      $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? AND s.campus_id = ? LIMIT 1");
+                      $pst->bind_param('ii', $stock_id, $campus_id);
+                  } else {
+                      $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
+                      $pst->bind_param('i', $stock_id);
+                  }
                   $pst->execute();
                   $picked_item = $pst->get_result()->fetch_assoc();
               }
@@ -122,23 +218,32 @@
       if ($issue_qty <= 0) {
           echo json_encode(['success' => false, 'error' => 'Enter a valid quantity to issue.']); exit();
       }
-      $gst = $mysqli->prepare("SELECT quantity, campus_id FROM nurse_consumable_stock WHERE id = ? LIMIT 1");
-      if (!$gst) { echo json_encode(['success'=>false,'error'=>'Server error']); exit(); }
-      $gst->bind_param('i', $stock_id);
+      if ($campus_id) {
+          $gst = $mysqli->prepare("SELECT quantity, campus_id FROM nurse_consumable_stock WHERE id = ? AND campus_id = ? LIMIT 1");
+          if (!$gst) { echo json_encode(['success'=>false,'error'=>'Server error']); exit(); }
+          $gst->bind_param('ii', $stock_id, $campus_id);
+      } else {
+          $gst = $mysqli->prepare("SELECT quantity, campus_id FROM nurse_consumable_stock WHERE id = ? LIMIT 1");
+          if (!$gst) { echo json_encode(['success'=>false,'error'=>'Server error']); exit(); }
+          $gst->bind_param('i', $stock_id);
+      }
       $gst->execute();
       $gres = $gst->get_result();
       if ($g = $gres->fetch_assoc()) {
-          if ($campus_id && $g['campus_id'] != $campus_id) {
-              echo json_encode(['success' => false, 'error' => 'You cannot issue stock from another location.']); exit();
-          } elseif ($g['quantity'] < $issue_qty) {
+          if ($g['quantity'] < $issue_qty) {
               echo json_encode(['success' => false, 'error' => 'Not enough stock to issue.']); exit();
           } else {
               $upd = $mysqli->prepare("UPDATE nurse_consumable_stock SET quantity = quantity - ? WHERE id = ?");
               $upd->bind_param('ii', $issue_qty, $stock_id);
               $upd->execute();
               // fetch new quantity
-              $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
-              $pst->bind_param('i', $stock_id);
+              if ($campus_id) {
+                  $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? AND s.campus_id = ? LIMIT 1");
+                  $pst->bind_param('ii', $stock_id, $campus_id);
+              } else {
+                  $pst = $mysqli->prepare("SELECT s.id AS stock_id, s.quantity, s.campus_id, n.id AS consumable_id, n.name, n.category FROM nurse_consumable_stock s JOIN nurse_consumables n ON n.id = s.consumable_id WHERE s.id = ? LIMIT 1");
+                  $pst->bind_param('i', $stock_id);
+              }
               $pst->execute();
               $new = $pst->get_result()->fetch_assoc();
               echo json_encode(['success' => true, 'message' => "Issued $issue_qty item(s) successfully.", 'item' => $new]);
@@ -147,6 +252,150 @@
       } else {
           echo json_encode(['success' => false, 'error' => 'Stock record not found.']); exit();
       }
+  }
+
+  /* ============================================================
+     AJAX: FETCH NURSE CONSUMABLES BASED ON WORKING LOCATION
+     (MODELED AFTER consumables_ajax.php / lab consumables)
+  =============================================================== */
+  if (isset($_GET['ajax']) && $_GET['ajax'] == '1') {
+      header('Content-Type: application/json');
+
+      if ((!isset($_SESSION['working_location']) || empty($_SESSION['working_location'])) &&
+          (!isset($_SESSION['working_location_id']) || empty($_SESSION['working_location_id']))) {
+          echo json_encode(['status' => 'error', 'message' => 'Working location not set.']);
+          exit;
+      }
+
+      $use_id = false;
+      $location_id = null;
+      if (isset($_SESSION['working_location_id']) && intval($_SESSION['working_location_id']) > 0) {
+          $use_id = true;
+          $location_id = intval($_SESSION['working_location_id']);
+      } else {
+          $location = $_SESSION['working_location'];
+      }
+
+      if ($use_id) {
+          $query = "SELECT 
+                        s.id,
+                        n.name AS consumable_name,
+                        n.category,
+                        s.quantity,
+                        cl.name AS location
+                    FROM nurse_consumable_stock s
+                    JOIN nurse_consumables n ON n.id = s.consumable_id
+                    JOIN campus_locations cl ON cl.id = s.campus_id
+                    WHERE s.campus_id = ?
+                    ORDER BY n.name ASC";
+
+          $stmtAjax = $mysqli->prepare($query);
+          $stmtAjax->bind_param('i', $location_id);
+          $stmtAjax->execute();
+      } else {
+          $query = "SELECT 
+                        s.id,
+                        n.name AS consumable_name,
+                        n.category,
+                        s.quantity,
+                        cl.name AS location
+                    FROM nurse_consumable_stock s
+                    JOIN nurse_consumables n ON n.id = s.consumable_id
+                    JOIN campus_locations cl ON cl.id = s.campus_id
+                    WHERE s.campus_id = (
+                          SELECT id FROM campus_locations WHERE name = ?
+                    )
+                    ORDER BY n.name ASC";
+
+          $stmtAjax = $mysqli->prepare($query);
+          $stmtAjax->bind_param('s', $location);
+          $stmtAjax->execute();
+      }
+
+      $resultAjax = $stmtAjax->get_result();
+      $consumables = [];
+      while ($row = $resultAjax->fetch_assoc()) {
+          $consumables[] = $row;
+      }
+
+      echo json_encode(['status' => 'success', 'data' => $consumables]);
+      exit;
+  }
+
+  /* ============================================================
+     AJAX: PICK NURSE CONSUMABLE — DEDUCT FROM nurse_consumable_stock
+     Using the same inline quantity model as consumables_ajax.php
+  =============================================================== */
+  if (isset($_POST['pick']) && isset($_POST['id']) && isset($_POST['qty'])) {
+      header('Content-Type: application/json');
+
+      if ((!isset($_SESSION['working_location']) || empty($_SESSION['working_location'])) &&
+          (!isset($_SESSION['working_location_id']) || empty($_SESSION['working_location_id']))) {
+          echo json_encode(['status' => 'error', 'message' => 'Working location not set.']);
+          exit;
+      }
+
+      $id  = intval($_POST['id']);
+      $qty = intval($_POST['qty']);
+
+      if ($qty <= 0) {
+          echo json_encode(['status' => 'error', 'message' => 'Invalid quantity.']);
+          exit;
+      }
+
+      // Resolve campus/location id
+      $campus_pick_id = null;
+      if (isset($_SESSION['working_location_id']) && intval($_SESSION['working_location_id']) > 0) {
+          $campus_pick_id = intval($_SESSION['working_location_id']);
+      } else {
+          $locationName = $_SESSION['working_location'];
+          $locStmt = $mysqli->prepare("SELECT id FROM campus_locations WHERE name = ? LIMIT 1");
+          if ($locStmt) {
+              $locStmt->bind_param('s', $locationName);
+              $locStmt->execute();
+              $locRes = $locStmt->get_result();
+              if ($locRow = $locRes->fetch_assoc()) {
+                  $campus_pick_id = intval($locRow['id']);
+              }
+          }
+      }
+
+      if (!$campus_pick_id) {
+          echo json_encode(['status' => 'error', 'message' => 'Unable to resolve working location.']);
+          exit;
+      }
+
+      $mysqli->begin_transaction();
+      try {
+          $stmtCheck = $mysqli->prepare("SELECT quantity FROM nurse_consumable_stock WHERE id = ? AND campus_id = ? LIMIT 1");
+          $stmtCheck->bind_param('ii', $id, $campus_pick_id);
+          $stmtCheck->execute();
+          $stockResult = $stmtCheck->get_result();
+
+          if ($stockResult->num_rows === 0) {
+              throw new Exception('Consumable not found for your current location.');
+          }
+
+          $stockRow = $stockResult->fetch_assoc();
+          $stockQty = (int)$stockRow['quantity'];
+
+          if ($qty > $stockQty) {
+              throw new Exception('Quantity exceeds available stock at this location.');
+          }
+
+          $newQty = $stockQty - $qty;
+          $stmtUpd = $mysqli->prepare("UPDATE nurse_consumable_stock SET quantity = ? WHERE id = ? AND campus_id = ?");
+          $stmtUpd->bind_param('iii', $newQty, $id, $campus_pick_id);
+          $stmtUpd->execute();
+
+          $mysqli->commit();
+          echo json_encode(['status' => 'success', 'message' => 'Consumable picked successfully.']);
+      } catch (Exception $e) {
+          $mysqli->rollback();
+          echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+      }
+
+      exit;
   }
 ?>
 <!DOCTYPE html>
@@ -184,40 +433,139 @@
                                 <div class="page-title-box">
                                     
                                     <h4 class="page-title">OOU Hospital Management System Dashboard</h4>
+                                    <h2><?php echo getcampus($campusid,$mysqli); ?></h2>
                                 </div>
                             </div>
                         </div>     
                         <!-- end page title --> 
-
                         <?php if(isset($err)) echo "<div class='alert alert-danger'>$err</div>"; ?>
                         <?php if(isset($success)) echo "<div class='alert alert-success'>$success</div>"; ?>
 
-                        <?php if(!empty($picked_item)) { ?>
+                        <?php if (isset($_GET['nurse_pick']) && $_GET['nurse_pick'] == '1'): ?>
+
+                        <!-- Nurse Consumables Picking (modeled after consumables_ajax.php) -->
                         <div class="row mb-3">
                             <div class="col-12">
                                 <div class="card">
-                                    <div class="card-header bg-info text-white">
-                                        <h5 class="card-title mb-0">Picked Consumable</h5>
-                                    </div>
                                     <div class="card-body">
-                                        <p><strong>Stock ID:</strong> <?php echo htmlspecialchars($picked_item['stock_id']); ?></p>
-                                        <p><strong>Consumable:</strong> <?php echo htmlspecialchars($picked_item['name']); ?> (<?php echo htmlspecialchars($picked_item['category']); ?>)</p>
-                                        <p><strong>Available Quantity:</strong> <?php echo (int)$picked_item['quantity']; ?></p>
+                                        <h4 class="mb-3">Nurse Consumables (Pick Items)</h4>
 
-                                        <form method="post" class="row g-2">
-                                            <div class="col-md-4">
-                                                <input type="hidden" name="stock_id" value="<?php echo (int)$picked_item['stock_id']; ?>">
-                                                <input type="number" name="issue_qty" min="1" class="form-control" placeholder="Qty to issue" required>
+                                        <?php if (!isset($_SESSION['working_location']) && !isset($_SESSION['working_location_id'])): ?>
+                                            <form method="post" class="mb-3">
+                                                <div class="row g-2">
+                                                    <div class="col-12 col-md-4">
+                                                        <select name="working_location" class="form-control" required>
+                                                            <option value="">-- Select Your Working Location --</option>
+                                                            <?php
+                                                            $campuses_nd = $mysqli->query("SELECT id, name FROM campus_locations ORDER BY name ASC");
+                                                            while($c = $campuses_nd->fetch_assoc()){
+                                                                echo "<option value='".intval($c['id'])."'>".htmlspecialchars($c['name'])."</option>";
+                                                            }
+                                                            ?>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-12 col-md-2">
+                                                        <button type="submit" name="set_location" class="btn btn-primary w-100">Set Location</button>
+                                                    </div>
+                                                </div>
+                                            </form>
+                                        <?php else: ?>
+                                            <p>
+                                                <strong>Current Working Location:</strong> <?php echo htmlspecialchars($_SESSION['working_location']); ?>
+                                                <a href="?clear_location=1&amp;nurse_pick=1" class="btn btn-sm btn-warning ms-2">Change Location</a>
+                                            </p>
+
+                                            <div class="table-responsive">
+                                                <table class="table table-bordered" id="nurse_consumable_table">
+                                                    <thead class="thead-light">
+                                                        <tr>
+                                                            <th>Consumable</th>
+                                                            <th>Category</th>
+                                                            <th>Quantity</th>
+                                                            <th>Location</th>
+                                                            <th>Pick Quantity</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="nurse_consumable_results">
+                                                        <tr><td colspan="5" class="text-center text-muted">Loading consumables...</td></tr>
+                                                    </tbody>
+                                                </table>
                                             </div>
-                                            <div class="col-md-2">
-                                                <button type="submit" name="issue_stock" class="btn btn-warning">Issue</button>
-                                            </div>
-                                        </form>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <?php } ?>
+
+                        <?php if (isset($_SESSION['working_location']) || isset($_SESSION['working_location_id'])): ?>
+                        <script>
+                        async function fetchNurseConsumables() {
+                            const res = await fetch('nursing_dashboard.php?ajax=1');
+                            const data = await res.json();
+                            const tbody = document.getElementById('nurse_consumable_results');
+                            if (!tbody) return;
+                            tbody.innerHTML = '';
+
+                            if (data.status === 'success') {
+                                if (!data.data || data.data.length === 0) {
+                                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No consumables found for this location</td></tr>';
+                                    return;
+                                }
+
+                                data.data.forEach(row => {
+                                    tbody.innerHTML += `
+                                        <tr>
+                                            <td>${row.consumable_name}</td>
+                                            <td>${row.category}</td>
+                                            <td>${row.quantity}</td>
+                                            <td>${row.location}</td>
+                                            <td>
+                                                <input type="number" min="1" max="${row.quantity}" value="1"
+                                                       class="form-control form-control-sm d-inline-block"
+                                                       style="width:80px" id="nurse_pick_qty_${row.id}">
+                                                <button type="button" class="btn btn-sm btn-success ms-1" onclick="pickNurseConsumable(${row.id}, ${row.quantity})">Pick</button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                });
+                            } else {
+                                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">'+(data.message || 'Error loading consumables')+'</td></tr>';
+                            }
+                        }
+
+                        async function pickNurseConsumable(id, maxQty) {
+                            const input = document.getElementById('nurse_pick_qty_' + id);
+                            let qty = parseInt(input.value, 10);
+
+                            if (isNaN(qty) || qty <= 0) {
+                                alert('Please enter a valid quantity.');
+                                return;
+                            }
+
+                            if (qty > maxQty) {
+                                alert('You cannot pick more than the available quantity (' + maxQty + ').');
+                                return;
+                            }
+
+                            const formData = new FormData();
+                            formData.append('id', id);
+                            formData.append('qty', qty);
+                            formData.append('pick', 1);
+
+                            const res = await fetch('nursing_dashboard.php', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            const data = await res.json();
+                            alert(data.message || (data.status === 'success' ? 'Operation completed.' : 'Error'));
+                            fetchNurseConsumables();
+                        }
+
+                        document.addEventListener('DOMContentLoaded', fetchNurseConsumables);
+                        </script>
+                        <?php endif; ?>
+
+                        <?php endif; ?>
 
                         <div class="row">
                             <!--Start OutPatients-->

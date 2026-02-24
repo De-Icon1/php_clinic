@@ -1,11 +1,27 @@
 <?php
 session_start();
 include('assets/inc/config.php');
-include('assets/inc/checklogins.php');
-check_login();
-authorize();
 
+// Provide CSV format template for nurse consumables import
+if (isset($_GET['download_format'])) {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="nurse_stock_format.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['name','category','campus_name','quantity','supplier','lpo']);
+    fputcsv($out, ['Syringe','Consumable','Main Store','200','MedSupply Co','LPO-002']);
+    fclose($out);
+    exit();
+}
 
+// Ensure nurse_consumable_stock has supplier_name and lpo_ref columns
+$c1 = $mysqli->query("SHOW COLUMNS FROM nurse_consumable_stock LIKE 'supplier_name'");
+if (!$c1 || $c1->num_rows == 0) {
+    @ $mysqli->query("ALTER TABLE nurse_consumable_stock ADD COLUMN supplier_name VARCHAR(255) DEFAULT NULL");
+}
+$c2 = $mysqli->query("SHOW COLUMNS FROM nurse_consumable_stock LIKE 'lpo_ref'");
+if (!$c2 || $c2->num_rows == 0) {
+    @ $mysqli->query("ALTER TABLE nurse_consumable_stock ADD COLUMN lpo_ref VARCHAR(100) DEFAULT NULL");
+}
 
 /* ==================================================
    FETCH CAMPUSES AND MAP IDS
@@ -51,6 +67,8 @@ if (isset($_POST['add_consumable'])) {
 if (isset($_POST['add_stock'])) {
     $consumable_id = $_POST['consumable_id'];
     $qty = (int)$_POST['qty'];
+    $supplier = isset($_POST['supplier']) ? trim($_POST['supplier']) : null;
+    $lpo = isset($_POST['lpo']) ? trim($_POST['lpo']) : null;
 
     $chk = $mysqli->prepare("SELECT id, quantity FROM nurse_consumable_stock WHERE consumable_id=? AND campus_id=?");
     $chk->bind_param("ii", $consumable_id, $main_store_id);
@@ -59,13 +77,17 @@ if (isset($_POST['add_stock'])) {
 
     if ($r) {
         $new_qty = $r['quantity'] + $qty;
-        $upd = $mysqli->prepare("UPDATE nurse_consumable_stock SET quantity=? WHERE id=?");
-        $upd->bind_param("ii", $new_qty, $r['id']);
-        $upd->execute();
+        $upd = $mysqli->prepare("UPDATE nurse_consumable_stock SET quantity=?, supplier_name=?, lpo_ref=? WHERE id=?");
+        if ($upd) {
+            $upd->bind_param("issi", $new_qty, $supplier, $lpo, $r['id']);
+            $upd->execute();
+        }
     } else {
-        $ins = $mysqli->prepare("INSERT INTO nurse_consumable_stock (consumable_id, campus_id, quantity) VALUES (?, ?, ?)");
-        $ins->bind_param("iii", $consumable_id, $main_store_id, $qty);
-        $ins->execute();
+        $ins = $mysqli->prepare("INSERT INTO nurse_consumable_stock (consumable_id, campus_id, quantity, supplier_name, lpo_ref) VALUES (?, ?, ?, ?, ?)");
+        if ($ins) {
+            $ins->bind_param("iiiss", $consumable_id, $main_store_id, $qty, $supplier, $lpo);
+            $ins->execute();
+        }
     }
     $success = "Stock added to Main Store!";
 }
@@ -141,14 +163,14 @@ if(isset($_GET['export_nurse_stock'])){
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="nurse_stock.csv"');
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Consumable Name','Category','Campus','Quantity']);
+    fputcsv($output, ['Consumable Name','Category','Campus','Quantity','Supplier','Reference/LPO']);
     $sql = "SELECT s.quantity, cl.name AS campus_name, n.name AS consumable_name, n.category
             FROM nurse_consumable_stock s
             JOIN nurse_consumables n ON n.id = s.consumable_id
             JOIN campus_locations cl ON cl.id = s.campus_id
             ORDER BY cl.name ASC, n.name ASC";
     $res = $mysqli->query($sql);
-    while($row = $res->fetch_assoc()) fputcsv($output, [$row['consumable_name'], $row['category'], $row['campus_name'], $row['quantity']]);
+    while($row = $res->fetch_assoc()) fputcsv($output, [$row['consumable_name'], $row['category'], $row['campus_name'], $row['quantity'], $row['supplier_name'] ?? '', $row['lpo_ref'] ?? '']);
     fclose($output);
     exit();
 }
@@ -160,7 +182,7 @@ if(isset($_GET['export_admin_stock'])){
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="admin_nurse_stock.csv"');
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['Stock ID','Consumable ID','Consumable Name','Category','Campus ID','Campus Name','Quantity']);
+    fputcsv($output, ['Stock ID','Consumable ID','Consumable Name','Category','Campus ID','Campus Name','Quantity','Supplier','Reference/LPO']);
     $sql = "SELECT s.id AS stock_id, n.id AS consumable_id, n.name AS consumable_name, n.category, cl.id AS campus_id, cl.name AS campus_name, s.quantity
             FROM nurse_consumable_stock s
             JOIN nurse_consumables n ON n.id = s.consumable_id
@@ -168,7 +190,7 @@ if(isset($_GET['export_admin_stock'])){
             ORDER BY cl.name ASC, n.name ASC";
     $res = $mysqli->query($sql);
     while($row = $res->fetch_assoc()){
-        fputcsv($output, [$row['stock_id'],$row['consumable_id'],$row['consumable_name'],$row['category'],$row['campus_id'],$row['campus_name'],$row['quantity']]);
+        fputcsv($output, [$row['stock_id'],$row['consumable_id'],$row['consumable_name'],$row['category'],$row['campus_id'],$row['campus_name'],$row['quantity'],$row['supplier_name'] ?? '', $row['lpo_ref'] ?? '']);
     }
     fclose($output);
     exit();
@@ -272,7 +294,13 @@ if(isset($_POST['import_nurse_stock'])){
         $row = 0;
         while(($data = fgetcsv($handle, 1000, ",")) !== FALSE){
             if($row++ == 0) continue; // skip header
-            list($name, $category, $campus_name, $quantity) = $data;
+            // Expect: name, category, campus_name, quantity, supplier(optional), lpo(optional)
+            $name = $data[0] ?? '';
+            $category = $data[1] ?? '';
+            $campus_name = $data[2] ?? '';
+            $quantity = isset($data[3]) ? (int)$data[3] : 0;
+            $supplier = $data[4] ?? null;
+            $lpo = $data[5] ?? null;
             $stmt = $mysqli->prepare("SELECT id FROM nurse_consumables WHERE name=? AND category=?");
             $stmt->bind_param("ss", $name, $category);
             $stmt->execute();
@@ -290,12 +318,12 @@ if(isset($_POST['import_nurse_stock'])){
             $check->execute();
             $existing = $check->get_result()->fetch_assoc();
             if($existing){
-                $update = $mysqli->prepare("UPDATE nurse_consumable_stock SET quantity=? WHERE id=?");
-                $update->bind_param("ii", $quantity, $existing['id']);
+                $update = $mysqli->prepare("UPDATE nurse_consumable_stock SET quantity=?, supplier_name=?, lpo_ref=? WHERE id=?");
+                $update->bind_param("issi", $quantity, $supplier, $lpo, $existing['id']);
                 $update->execute();
             } else {
-                $insert = $mysqli->prepare("INSERT INTO nurse_consumable_stock (consumable_id, campus_id, quantity) VALUES (?,?,?)");
-                $insert->bind_param("iii", $consumable_id, $campus_id, $quantity);
+                $insert = $mysqli->prepare("INSERT INTO nurse_consumable_stock (consumable_id, campus_id, quantity, supplier_name, lpo_ref) VALUES (?,?,?,?,?)");
+                $insert->bind_param("iiiss", $consumable_id, $campus_id, $quantity, $supplier, $lpo);
                 $insert->execute();
             }
         }
@@ -315,12 +343,12 @@ if(isset($_POST['import_nurse_stock'])){
         <!-- Begin page -->
         <div id="wrapper">
 
-            <!-- Topbar Start --
-            <?php include('assets/inc/nav.php');?>
+            <!-- Topbar Start -->
+            <?php include("assets/inc/nav_r.php"); ?>
             <!-- end Topbar -->
 
             <!-- ========== Left Sidebar Start ========== -->
-            <?php include('assets/inc/sidebar.php');?>
+            <?php include("assets/inc/sidebar_admin.php");?>
             <!-- Left Sidebar End -->
 
             <!-- ============================================================== -->
@@ -392,6 +420,14 @@ if(isset($_POST['import_nurse_stock'])){
                     <div class="form-group col-md-4">
                         <label>Quantity</label>
                         <input type="number" name="qty" min="1" class="form-control" placeholder="Quantity" required>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label>Supplier Name</label>
+                        <input type="text" name="supplier" class="form-control" placeholder="Supplier (optional)">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label>Reference / LPO</label>
+                        <input type="text" name="lpo" class="form-control" placeholder="Ref / LPO (optional)">
                     </div>
                 </div>
                 <button class="btn btn-success" name="add_stock">Add Stock</button>

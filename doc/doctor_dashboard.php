@@ -5,7 +5,16 @@
   check_login();
   $doc_id=$_SESSION['doc_id'];
   $doc_number = $_SESSION['doc_number'];
+$campusid=$_SESSION['campus_id'];
 
+function getcampus($campusid,$mysqli){
+    $sql="SELECT * FROM campus_locations where id=$campusid"; 
+   $result = mysqli_query($mysqli,$sql);
+    $num=mysqli_num_rows($result);
+    $reply = mysqli_fetch_array($result);
+    $name=$reply['name'];
+    return $name;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -42,6 +51,7 @@
                                 <div class="page-title-box">
                                     
                                     <h4 class="page-title">OOU Hospital Management Information System Dashboard</h4>
+                                    <h2><?php echo getcampus($campusid,$mysqli); ?></h2>
                                 </div>
                             </div>
                         </div>     
@@ -69,7 +79,7 @@
                                                     $stmt->fetch();
                                                     $stmt->close();
                                                 ?>
-                                                <h3 class="text-dark mt-1"><span data-plugin="counterup"><?php echo $patient;?></span></h3>
+                                                <h3 class="text-dark mt-1"><span data-plugin="counterup"><?php echo $campusid;?></span></h3>
                                                 <p class="text-muted mb-1 text-truncate">Patients</p>
                                             </div>
                                         </div>
@@ -212,6 +222,10 @@
                                                     <th>Pulse</th>
                                                     <th>Respiration</th>
                                                      <th>Presure</th>
+                                                     <th>Sugar Level</th>
+                                                     <th>SpO2</th>
+                                                     <th>Height</th>
+                                                     <th>Weight</th>
                                                     <th>Action</th>
                                                 </tr>
                                             </thead>
@@ -246,6 +260,22 @@
                                                     </td>
                                                      <td>
                                                         <?php echo $row->vit_resprate; ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php echo $row->vit_bloodpress; ?> 
+                                                    </td>
+                                                    
+                                                    <td>
+                                                        <?php echo $row->vit_sugarlevel;?> mg/dL
+                                                    </td>
+                                                    <td>
+                                                        <?php echo $row->vit_Spo2;?> %
+                                                    </td>
+                                                    <td>
+                                                        <?php echo $row->vit_height;?> cm
+                                                    </td>
+                                                    <td>
+                                                        <?php echo $row->vit_weight;?> kg
                                                     </td>
                                                     <td>
                                                         <?php echo $row->vit_daterec;?> Years

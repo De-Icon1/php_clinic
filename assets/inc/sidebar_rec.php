@@ -37,7 +37,7 @@
                                         <a href="./his_admin_familycard.php">Family Patient</a>
                                     </li>
                                     <li>
-                                        <a href="./his_admin_register_patient.php">Ante natal Patient</a>
+                                        <a href="./his_admin_antenatal_patient.php">Ante natal Patient</a>
                                     </li>
                                     
                                 </ul>

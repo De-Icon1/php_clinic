@@ -24,16 +24,16 @@
                               <li>
                                 <a href="javascript: void(0);">
                                     <img src="./assets/img/Modify.png"></i>
-                                    <span> Medical Reports </span>
+                                    <span> Reports </span>
                                     <span class="menu-arrow"></span>
                                 </a>
                                 <ul class="nav-second-level" aria-expanded="false">
  
                                     <li>
-                                        <a href="#">Total Registered Patient</a>
+                                        <a href="total_registered.php">Total Registered Patient</a>
                                     </li>
                                      <li>
-                                        <a href="">Current Admitted Patient</a>
+                                        <a href="current_admitted.php">Current Admitted Patient</a>
                                     </li>
                                      <li>
                                         <a href="visitdate.php">Todays Visit Report</a>
@@ -46,9 +46,17 @@
                                         <a href="dailystock.php">Daily Stock Report</a>
                                     </li>
                                     <li>
-                                        <a href="">Pharmacy Sales Report</a>
+                                        <a href="pharmacy_report.php">Pharmacy Sales Report</a>
                                     </li>
-                                    
+                                    <li>
+                                        <a href="storestockview_report.php">Store Stock View</a>
+                                    </li>
+                                    <li>
+                                        <a href="stock_report.php">Stock Report</a>
+                                    </li>
+                                    <li>
+                                        <a href="phardailystock_report.php">Pharmacy Daily Stock</a>
+                                    </li>
                                 </ul>
                             </li>
 
