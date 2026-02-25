@@ -268,7 +268,7 @@
                                                     <td><?php echo $row->surname;?></td>
                                                     <td><?php echo $row->firstname;?></td>
                                                     <td><?php echo $row->middlename;?></td>
-                                                    <td><?php echo $row->marrital;?></td>
+                                                    <td><?php echo $row->marital;?></td>
                                                     <td><?php echo $row->reg_date;?> </td>
                                                     <td><?php echo $row->phone;?></td>
                                                     <td><?php echo $row->address;?></td>
