@@ -141,13 +141,42 @@
                                             </thead>
                                             <?php
                                             /*
-                                                *get details of allpatients
-                                                *
+                                                *get details of all patients for today's visit
+                                                *Filter by campus location to show only patients from user's location
+                                                *Use working_location_id from session (set during login in index.php)
                                             */
                                             $rdate=date('Y-m-d');
-                                                $ret="SELECT * FROM  sendsignal where Date='$rdate'  ORDER BY id DESC "; 
-                                                $stmt= $mysqli->prepare($ret) ;
-                                                $stmt->execute() ;//ok
+                                            
+                                            // Get campus location ID from session (set during login)
+                                            $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
+                                            
+                                            // Check if sendsignal table has campus_id column
+                                            $hascamp = 0;
+                                            $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
+                                            if ($resCol) {
+                                                $rowCol = $resCol->fetch_assoc();
+                                                $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
+                                            }
+                                            
+                                            // Build query with mandatory campus filter if column exists and campus_id is available
+                                            if ($hascamp && $campus_id) {
+                                                // Campus filtering is ENABLED: Only show patients from this location
+                                                $ret="SELECT * FROM sendsignal WHERE Date=? AND campus_id=? ORDER BY id DESC"; 
+                                                $stmt = $mysqli->prepare($ret);
+                                                $stmt->bind_param('si', $rdate, $campus_id);
+                                            } elseif ($hascamp && !$campus_id) {
+                                                // Campus column exists but no campus_id in session - show NO patients for safety
+                                                $ret="SELECT * FROM sendsignal WHERE 1=0"; 
+                                                $stmt = $mysqli->prepare($ret);
+                                            } else {
+                                                // Campus column doesn't exist yet - fallback to date only
+                                                $ret="SELECT * FROM sendsignal WHERE Date=? ORDER BY id DESC"; 
+                                                $stmt = $mysqli->prepare($ret);
+                                                $stmt->bind_param('s', $rdate);
+                                            }
+                                            
+                                            if ($stmt) {
+                                                $stmt->execute();
                                                 $res=$stmt->get_result();
                                                 $cnt=1;
                                                 while($row=$res->fetch_object())
@@ -168,7 +197,9 @@
                                                    
                                                 </tr>
                                                 </tbody>
-                                            <?php  $cnt = $cnt +1 ; }?>
+                                            <?php  $cnt = $cnt +1 ; }
+                                            } // Close if($stmt)
+                                            ?>
                                             <tfoot>
                                             <tr class="active">
                                                 <td colspan="8">
