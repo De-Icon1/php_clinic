@@ -142,18 +142,39 @@
                                             </thead>
                                             <?php
                                             /*
-                                                *get details of allpatients
-                                                *
+                                                *get details of all patients for today's visit
+                                                *Filter by campus location to show only patients from user's location
                                             */
                                             $rdate=date('Y-m-d');
                                             $status='Not Yet';
-                                                $ret="SELECT * FROM  sendsignal where Date='$rdate' and status='$status'  ORDER BY id DESC "; 
-                                                $stmt= $mysqli->prepare($ret) ;
-                                                $stmt->execute() ;//ok
-                                                $res=$stmt->get_result();
-                                                $cnt=1;
-                                                while($row=$res->fetch_object())
-                                                {
+                                            
+                                            // Get campus location ID from session
+                                            $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
+                                            
+                                            // Check if sendsignal table has campus_id column
+                                            $hascampus = 0;
+                                            $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
+                                            if ($resCol) {
+                                                $rowCol = $resCol->fetch_assoc();
+                                                $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
+                                            }
+                                            
+                                            // Build query with campus filter if applicable
+                                            if ($hascamp && $campus_id) {
+                                                $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? AND campus_id=? ORDER BY id DESC"; 
+                                                $stmt = $mysqli->prepare($ret);
+                                                $stmt->bind_param('ssi', $rdate, $status, $campus_id);
+                                            } else {
+                                                $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? ORDER BY id DESC"; 
+                                                $stmt = $mysqli->prepare($ret);
+                                                $stmt->bind_param('ss', $rdate, $status);
+                                            }
+                                            
+                                            $stmt->execute();
+                                            $res=$stmt->get_result();
+                                            $cnt=1;
+                                            while($row=$res->fetch_object())
+                                            {
                                             ?>
 
                                                 <tbody>

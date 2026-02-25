@@ -146,10 +146,28 @@ elseif (strpos($ind, 'A') !== false) {
             
             $fname=$pat_surn." ".$pat_fname." ".$pat_mname;
             $pics=$pic;
-
-			$query="insert into sendsignal(pat_code,Fullname,Date,Time,Category,dob,picture,status) values(?,?,?,?,?,?,?,?)";
-			$stmt = $mysqli->prepare($query);
-			$rc=$stmt->bind_param('ssssssss',$pat_code,$fname,$rdate,$time,$category, $pat_dob,$pics,$status);
+            
+            // Get campus location ID from session
+            $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
+            
+            // Check if sendsignal table has campus_id column
+            $hascamp = 0;
+            $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
+            if ($resCol) {
+                $rowCol = $resCol->fetch_assoc();
+                $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
+            }
+            
+            // Insert with campus_id if column exists
+            if ($hascamp && $campus_id) {
+                $query="insert into sendsignal(pat_code,Fullname,Date,Time,Category,dob,picture,status,campus_id) values(?,?,?,?,?,?,?,?,?)";
+                $stmt = $mysqli->prepare($query);
+                $rc=$stmt->bind_param('ssssssssi',$pat_code,$fname,$rdate,$time,$category, $pat_dob,$pics,$status,$campus_id);
+            } else {
+                $query="insert into sendsignal(pat_code,Fullname,Date,Time,Category,dob,picture,status) values(?,?,?,?,?,?,?,?)";
+                $stmt = $mysqli->prepare($query);
+                $rc=$stmt->bind_param('ssssssss',$pat_code,$fname,$rdate,$time,$category, $pat_dob,$pics,$status);
+            }
 			$stmt->execute();
 			/*
 			*Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
