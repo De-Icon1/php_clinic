@@ -1,4 +1,9 @@
 <?php
+// Start session at the very beginning
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 $dbuser="root";
 $dbpass="";
 $host="localhost";

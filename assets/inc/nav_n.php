@@ -1,7 +1,12 @@
 <?php
-    // Check if session variables exist before accessing them
-    $doc_id = isset($_SESSION['doc_id']) ? $_SESSION['doc_id'] : null;
-    $doc_number = isset($_SESSION['doc_number']) ? $_SESSION['doc_number'] : null;
+    // Ensure session is started - call it even if already started (safe in PHP)
+    if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+        @session_start();
+    }
+    
+    // Now safely access session
+    $doc_id = (isset($_SESSION) && !empty($_SESSION['doc_id'])) ? $_SESSION['doc_id'] : null;
+    $doc_number = (isset($_SESSION) && !empty($_SESSION['doc_number'])) ? $_SESSION['doc_number'] : null;
     
     // Only query if session variables are set
     if ($doc_id && $doc_number) {

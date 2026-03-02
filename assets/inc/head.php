@@ -16,6 +16,7 @@
         <link href="assets/css/icons.min.css" rel="stylesheet" type="text/css" />
         <link href="assets/css/app.min.css" rel="stylesheet" type="text/css" />
         <link href="assets/css/responsive-custom.css" rel="stylesheet" type="text/css" />
+        <link href="assets/css/mobile-responsive.css" rel="stylesheet" type="text/css" />
          <!-- Loading button css -->
          <link href="assets/libs/ladda/ladda-themeless.min.css" rel="stylesheet" type="text/css" />
 
