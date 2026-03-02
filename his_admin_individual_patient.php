@@ -248,12 +248,32 @@
                                             </thead>
                                             <?php
                                             /*
-                                                *get details of allpatients
-                                                *
+                                                *get details of all patients
+                                                *Filter by campus location if enabled
                                             */
-                                                $ret="SELECT * FROM  individual ORDER BY id DESC "; 
-                                                $stmt= $mysqli->prepare($ret) ;
-                                                $stmt->execute() ;//ok
+                                                // Get user's campus from session
+                                                $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
+                                                
+                                                // Check if sendsignal table has campus_id column
+                                                $hascamp = 0;
+                                                $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
+                                                if ($resCol) {
+                                                    $rowCol = $resCol->fetch_assoc();
+                                                    $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
+                                                }
+                                                
+                                                // Build query with campus filtering
+                                                if ($hascamp && $campus_id) {
+                                                    // Only show patients who have sendsignal records for this campus
+                                                    $ret = "SELECT DISTINCT i.* FROM individual i INNER JOIN sendsignal s ON i.code = s.pat_code WHERE s.campus_id = ? ORDER BY i.id DESC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('i', $campus_id);
+                                                } else {
+                                                    // No campus filtering - show all
+                                                    $ret = "SELECT * FROM individual ORDER BY id DESC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                }
+                                                $stmt->execute();
                                                 $res=$stmt->get_result();
                                                 $cnt=1;
                                                 while($row=$res->fetch_object())

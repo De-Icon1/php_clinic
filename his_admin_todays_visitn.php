@@ -162,33 +162,26 @@
                                                 $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
                                             }
                                             
-                                            // Build query with mandatory campus filter if column exists and campus_id is available
-                                            if ($hascamp && $campus_id) {
-                                                // Campus filtering is ENABLED: Only show patients from this location
-                                                if ($status === 'All') {
-                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND campus_id=? ORDER BY id DESC"; 
-                                                    $stmt = $mysqli->prepare($ret);
-                                                    $stmt->bind_param('si', $rdate, $campus_id);
-                                                } else {
-                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? AND campus_id=? ORDER BY id DESC"; 
-                                                    $stmt = $mysqli->prepare($ret);
-                                                    $stmt->bind_param('ssi', $rdate, $status, $campus_id);
-                                                }
+                                            // Build query - note: "All" bypasses campus filtering to show all records
+                                            if ($status === 'All') {
+                                                // "All" option - show all patients regardless of campus/status
+                                                $ret="SELECT * FROM sendsignal WHERE Date=? ORDER BY id DESC"; 
+                                                $stmt = $mysqli->prepare($ret);
+                                                $stmt->bind_param('s', $rdate);
+                                            } elseif ($hascamp && $campus_id) {
+                                                // Campus filtering is ENABLED: Only show patients from this location with specific status
+                                                $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? AND campus_id=? ORDER BY id DESC"; 
+                                                $stmt = $mysqli->prepare($ret);
+                                                $stmt->bind_param('ssi', $rdate, $status, $campus_id);
                                             } elseif ($hascamp && !$campus_id) {
                                                 // Campus column exists but no campus_id in session - show NO patients for safety
                                                 $ret="SELECT * FROM sendsignal WHERE 1=0"; 
                                                 $stmt = $mysqli->prepare($ret);
                                             } else {
                                                 // Campus column doesn't exist yet - fallback to date/status only
-                                                if ($status === 'All') {
-                                                    $ret="SELECT * FROM sendsignal WHERE Date=? ORDER BY id DESC"; 
-                                                    $stmt = $mysqli->prepare($ret);
-                                                    $stmt->bind_param('s', $rdate);
-                                                } else {
-                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? ORDER BY id DESC"; 
-                                                    $stmt = $mysqli->prepare($ret);
-                                                    $stmt->bind_param('ss', $rdate, $status);
-                                                }
+                                                $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? ORDER BY id DESC"; 
+                                                $stmt = $mysqli->prepare($ret);
+                                                $stmt->bind_param('ss', $rdate, $status);
                                             }
                                             
                                             if ($stmt) {
