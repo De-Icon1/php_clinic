@@ -111,12 +111,12 @@
                                     <div class="mb-2">
                                         <div class="row">
                                             <div class="col-12 text-sm-center form-inline" >
-                                                <div class="form-group mr-2" style="display:none">
-                                                    <select id="demo-foo-filter-status" class="custom-select custom-select-sm">
-                                                        <option value="">Show all</option>
-                                                        <option value="Discharged">Discharged</option>
-                                                        <option value="OutPatients">OutPatients</option>
-                                                        <option value="InPatients">InPatients</option>
+                                                <div class="form-group mr-2">
+                                                    <label for="status-filter" class="mr-2">Filter by Status:</label>
+                                                    <select id="status-filter" name="status_filter" class="custom-select custom-select-sm">
+                                                        <option value="Not Yet" selected>Pending (Not Yet Checked)</option>
+                                                        <option value="Checked">Checked</option>
+                                                        <option value="All">All Patients</option>
                                                     </select>
                                                 </div>
                                                
@@ -147,7 +147,9 @@
                                                 *Use working_location_id from session (set during login in index.php)
                                             */
                                             $rdate=date('Y-m-d');
-                                            $status='Not Yet';
+                                            
+                                            // Get status filter from URL or POST (default to "Not Yet")
+                                            $status = isset($_GET['status_filter']) ? $_GET['status_filter'] : (isset($_POST['status_filter']) ? $_POST['status_filter'] : 'Not Yet');
                                             
                                             // Get campus location ID from session (set during login)
                                             $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
@@ -163,18 +165,30 @@
                                             // Build query with mandatory campus filter if column exists and campus_id is available
                                             if ($hascamp && $campus_id) {
                                                 // Campus filtering is ENABLED: Only show patients from this location
-                                                $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? AND campus_id=? ORDER BY id DESC"; 
-                                                $stmt = $mysqli->prepare($ret);
-                                                $stmt->bind_param('ssi', $rdate, $status, $campus_id);
+                                                if ($status === 'All') {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND campus_id=? ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('si', $rdate, $campus_id);
+                                                } else {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? AND campus_id=? ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('ssi', $rdate, $status, $campus_id);
+                                                }
                                             } elseif ($hascamp && !$campus_id) {
                                                 // Campus column exists but no campus_id in session - show NO patients for safety
                                                 $ret="SELECT * FROM sendsignal WHERE 1=0"; 
                                                 $stmt = $mysqli->prepare($ret);
                                             } else {
                                                 // Campus column doesn't exist yet - fallback to date/status only
-                                                $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? ORDER BY id DESC"; 
-                                                $stmt = $mysqli->prepare($ret);
-                                                $stmt->bind_param('ss', $rdate, $status);
+                                                if ($status === 'All') {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('s', $rdate);
+                                                } else {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('ss', $rdate, $status);
+                                                }
                                             }
                                             
                                             if ($stmt) {
@@ -274,6 +288,12 @@
       $('.dataTables_paginate > a').wrapInner('<span />');
       $('.dataTables_paginate > a:first-child').append('<i class="icon-chevron-left shaded"></i>');
       $('.dataTables_paginate > a:last-child').append('<i class="icon-chevron-right shaded"></i>');
+      
+      // Status filter handler
+      $('#status-filter').on('change', function() {
+        var selected_status = $(this).val();
+        window.location.href = '?status_filter=' + selected_status;
+      });
     } );
   </script>
   <script type="text/javascript">
