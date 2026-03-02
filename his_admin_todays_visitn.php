@@ -162,26 +162,41 @@
                                                 $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
                                             }
                                             
-                                            // Build query - note: "All" bypasses campus filtering to show all records
-                                            if ($status === 'All') {
-                                                // "All" option - show all patients regardless of campus/status
-                                                $ret="SELECT * FROM sendsignal WHERE Date=? ORDER BY id DESC"; 
-                                                $stmt = $mysqli->prepare($ret);
-                                                $stmt->bind_param('s', $rdate);
-                                            } elseif ($hascamp && $campus_id) {
-                                                // Campus filtering is ENABLED: Only show patients from this location with specific status
-                                                $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? AND campus_id=? ORDER BY id DESC"; 
-                                                $stmt = $mysqli->prepare($ret);
-                                                $stmt->bind_param('ssi', $rdate, $status, $campus_id);
+                                            // Build query with campus filter if available
+                                            if ($hascamp && $campus_id) {
+                                                // User has campus assigned: Show only patients from that campus
+                                                if ($status === 'All') {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND campus_id=? ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('si', $rdate, $campus_id);
+                                                } else {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? AND campus_id=? ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('ssi', $rdate, $status, $campus_id);
+                                                }
                                             } elseif ($hascamp && !$campus_id) {
-                                                // Campus column exists but no campus_id in session - show NO patients for safety
-                                                $ret="SELECT * FROM sendsignal WHERE 1=0"; 
-                                                $stmt = $mysqli->prepare($ret);
+                                                // Campus column exists but user has NO campus assigned
+                                                // Show patients with NULL campus_id (from before campus_id was added)
+                                                if ($status === 'All') {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND (campus_id IS NULL OR campus_id = 0) ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('s', $rdate);
+                                                } else {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? AND (campus_id IS NULL OR campus_id = 0) ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('ss', $rdate, $status);
+                                                }
                                             } else {
-                                                // Campus column doesn't exist yet - fallback to date/status only
-                                                $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? ORDER BY id DESC"; 
-                                                $stmt = $mysqli->prepare($ret);
-                                                $stmt->bind_param('ss', $rdate, $status);
+                                                // Campus column doesn't exist - no campus filtering
+                                                if ($status === 'All') {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('s', $rdate);
+                                                } else {
+                                                    $ret="SELECT * FROM sendsignal WHERE Date=? AND status=? ORDER BY id DESC"; 
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('ss', $rdate, $status);
+                                                }
                                             }
                                             
                                             if ($stmt) {

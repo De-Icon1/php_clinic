@@ -3,33 +3,6 @@
 	session_start();
 	include('assets/inc/config.php');
      $ind=isset($_GET['id']) ? $_GET['id'] : null;
-     
-     // Validate patient belongs to user's campus (if campus filtering enabled)
-     if ($ind) {
-         $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
-         
-         // Check if sendsignal table has campus_id column
-         $hascamp = 0;
-         $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
-         if ($resCol) {
-             $rowCol = $resCol->fetch_assoc();
-             $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
-         }
-         
-         // If campus filtering enabled, verify patient access
-         if ($hascamp && $campus_id) {
-             $verify_query = "SELECT id FROM sendsignal WHERE pat_code = ? AND campus_id = ? LIMIT 1";
-             $verify_stmt = $mysqli->prepare($verify_query);
-             $verify_stmt->bind_param('si', $ind, $campus_id);
-             $verify_stmt->execute();
-             $verify_result = $verify_stmt->get_result();
-             
-             if ($verify_result->num_rows === 0) {
-                 // Patient not in this campus - redirect back
-                 die("<script>alert('Access denied. Patient not found in your campus.'); window.location='his_admin_searchrecord.php';</script>");
-             }
-         }
-     }
 
      if (strpos($ind, 'IND') !== false) {
 

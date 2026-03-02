@@ -9,37 +9,7 @@
             $searching = isset($_POST['Searching']) ? trim($_POST['Searching']) : '';
             
             if($searching){
-                // Get user's campus from session
-                $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
-                
-                // Check if sendsignal table has campus_id column
-                $hascamp = 0;
-                $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
-                if ($resCol) {
-                    $rowCol = $resCol->fetch_assoc();
-                    $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
-                }
-                
-                // If campus filtering is enabled, verify patient belongs to this campus
-                if ($hascamp && $campus_id) {
-                    // Check if patient has any visit record for this campus
-                    $check_query = "SELECT id FROM sendsignal WHERE pat_code = ? AND campus_id = ? LIMIT 1";
-                    $check_stmt = $mysqli->prepare($check_query);
-                    $check_stmt->bind_param('si', $searching, $campus_id);
-                    $check_stmt->execute();
-                    $check_result = $check_stmt->get_result();
-                    
-                    if ($check_result->num_rows > 0) {
-                        // Patient exists in this campus - allow access
-                        echo "<script>location='his_admin_sendsignals.php?id=$searching'</script>";
-                    } else {
-                        // Patient does not exist in this campus - deny access
-                        echo "<script>alert('Patient record not found in your campus. Access denied.'); history.back();</script>";
-                    }
-                } else {
-                    // No campus filtering - allow search
-                    echo "<script>location='his_admin_sendsignals.php?id=$searching'</script>";
-                }
+               echo "<script>location='his_admin_sendsignals.php?id=$searching'</script>";
             }
 		}
 

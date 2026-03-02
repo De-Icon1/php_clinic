@@ -545,28 +545,9 @@ function getdurtn($val){
             <?php
                 $pat_id=isset($_GET['pat_id']) ? $_GET['pat_id'] : null;
                  $pat_name=isset($_GET['pat_name']) ? $_GET['pat_name'] : null;
-                 
-                 // Get doctor's campus from session
-                 $doc_campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
-                 
-                 // Check if sendsignal table has campus_id column
-                 $hascamp = 0;
-                 $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
-                 if ($resCol) {
-                     $rowCol = $resCol->fetch_assoc();
-                     $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
-                 }
-                 
-                 // Query sendsignal with campus validation
-                 if ($hascamp && $doc_campus_id) {
-                     $rt="SELECT * FROM sendsignal WHERE pat_code=? AND campus_id=?"; 
-                     $stt= $mysqli->prepare($rt);
-                     $stt->bind_param('si', $pat_id, $doc_campus_id);
-                 } else {
-                     $rt="SELECT * FROM sendsignal WHERE pat_code=?"; 
-                     $stt= $mysqli->prepare($rt);
-                     $stt->bind_param('s', $pat_id);
-                 }
+                 $rt="SELECT * FROM sendsignal where pat_code=?"; 
+                $stt= $mysqli->prepare($rt);
+                $stt->bind_param('s', $pat_id);
                 $stt->execute();
                 $rs=$stt->get_result();
                 $rw=$rs->fetch_object();
