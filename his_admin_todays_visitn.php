@@ -183,9 +183,19 @@
                                                         $stmt->bind_param('ssi', $rdate, $status, $campus_id);
                                                     }
                                                 } else {
-                                                    // Column exists but user has no campus assigned: show no records (safety)
-                                                    $ret = "SELECT * FROM sendsignal WHERE 1 = 0";
-                                                    $stmt = $mysqli->prepare($ret);
+                                                    // Column exists but user has no campus assigned.
+                                                    // Many live servers use 0 or NULL for unassigned sendsignal rows.
+                                                    // Show unassigned rows (campus_id = 0 or NULL) for today's date so staff
+                                                    // can still see signals created when their session wasn't set.
+                                                    if ($status === 'All') {
+                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND (campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
+                                                        $stmt = $mysqli->prepare($ret);
+                                                        $stmt->bind_param('s', $rdate);
+                                                    } else {
+                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND status = ? AND (campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
+                                                        $stmt = $mysqli->prepare($ret);
+                                                        $stmt->bind_param('ss', $rdate, $status);
+                                                    }
                                                 }
                                             } else {
                                                 // No campus column in sendsignal: fall back to Date/status only
