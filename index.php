@@ -20,8 +20,25 @@
         $stmt -> bind_result($doc_number, $doc_pwd, $doc_id, $doc_dept);//bind result
         $rs=$stmt->fetch();
         $stmt->close();
-        $campid=getcampusid($campusname,$mysqli);
-        $_SESSION['campus_id'] = $campusname;
+        $campid = getcampusid($campusname,$mysqli);
+        // If the user selected a valid campus at login, store the numeric id and use it as working location.
+        if (is_numeric($campid) && $campid) {
+            $_SESSION['campus_id'] = (int) $campid;
+            $_SESSION['working_location_id'] = (int) $campid;
+            // also store the human readable name if available
+            $lstmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+            if ($lstmt) {
+                $lstmt->bind_param('i', $campid);
+                $lstmt->execute();
+                $lres = $lstmt->get_result();
+                if ($lrow = $lres->fetch_assoc()) {
+                    $_SESSION['working_location'] = $lrow['name'];
+                }
+            }
+        } else {
+            // fallback: keep campus session null
+            $_SESSION['campus_id'] = null;
+        }
         $_SESSION['doc_id'] = $doc_id;
         $_SESSION['doc_number'] = $doc_number;//Assign session to doc_number id
         //$uip=$_SERVER['REMOTE_ADDR'];
@@ -38,15 +55,17 @@
                 if ($crow = $cres->fetch_assoc()) {
                     $campus_id = $crow['campus_id'];
                     if (!empty($campus_id)) {
-                        
-                        $_SESSION['working_location_id'] = $campus_id;
-                        $lstmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
-                        if ($lstmt) {
-                            $lstmt->bind_param('i', $campus_id);
-                            $lstmt->execute();
-                            $lres = $lstmt->get_result();
-                            if ($lrow = $lres->fetch_assoc()) {
-                                $_SESSION['working_location'] = $lrow['name'];
+                        // Only set working location from his_docs when it hasn't been set by the login campus selection
+                        if (!isset($_SESSION['working_location_id']) || empty($_SESSION['working_location_id'])) {
+                            $_SESSION['working_location_id'] = (int) $campus_id;
+                            $lstmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+                            if ($lstmt) {
+                                $lstmt->bind_param('i', $campus_id);
+                                $lstmt->execute();
+                                $lres = $lstmt->get_result();
+                                if ($lrow = $lres->fetch_assoc()) {
+                                    $_SESSION['working_location'] = $lrow['name'];
+                                }
                             }
                         }
                     }

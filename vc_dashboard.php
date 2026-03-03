@@ -210,10 +210,25 @@
                                         <div class="col-6">
                                             <div class="text-right">
                                                 <?php
-                                                    //code for summing up number of employees in the certain Hospital 
-                                                $rdate=date('Y-m-d');
-                                                    $result ="SELECT count(*) FROM sendsignal where Date='$rdate'";
-                                                    $stmt = $mysqli->prepare($result);
+                                                    // Campus-scoped count of today's visited patients
+                                                    $rdate = date('Y-m-d');
+                                                    $campus_id = isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id']) ? (int)$_SESSION['campus_id'] : null);
+                                                    $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
+                                                    $hascamp = $resCol ? (int)$resCol->fetch_assoc()['cnt'] : 0;
+                                                    if ($hascamp) {
+                                                        if ($campus_id) {
+                                                            $result = "SELECT count(*) FROM sendsignal WHERE Date = ? AND campus_id = ?";
+                                                            $stmt = $mysqli->prepare($result);
+                                                            $stmt->bind_param('si', $rdate, $campus_id);
+                                                        } else {
+                                                            $result = "SELECT 0";
+                                                            $stmt = $mysqli->prepare($result);
+                                                        }
+                                                    } else {
+                                                        $result = "SELECT count(*) FROM sendsignal WHERE Date = ?";
+                                                        $stmt = $mysqli->prepare($result);
+                                                        $stmt->bind_param('s', $rdate);
+                                                    }
                                                     $stmt->execute();
                                                     $stmt->bind_result($doc);
                                                     $stmt->fetch();

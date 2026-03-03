@@ -543,15 +543,35 @@ function getdurtn($val){
             <!--Get Details Of A Single User And Display Them Here-->
 
             <?php
-                $pat_id=isset($_GET['pat_id']) ? $_GET['pat_id'] : null;
+                 $pat_id=isset($_GET['pat_id']) ? $_GET['pat_id'] : null;
                  $pat_name=isset($_GET['pat_name']) ? $_GET['pat_name'] : null;
-                 $rt="SELECT * FROM sendsignal where pat_code=?"; 
-                $stt= $mysqli->prepare($rt);
-                $stt->bind_param('s', $pat_id);
-                $stt->execute();
-                $rs=$stt->get_result();
-                $rw=$rs->fetch_object();
-                $time=$rw->Time;
+                // Apply campus scoping for sendsignal lookup
+                $campus_id = isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id']) ? (int)$_SESSION['campus_id'] : null);
+                $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
+                $hascamp = $resCol ? (int)$resCol->fetch_assoc()['cnt'] : 0;
+                if ($hascamp) {
+                    if ($campus_id) {
+                        $rt = "SELECT * FROM sendsignal WHERE pat_code = ? AND campus_id = ? LIMIT 1";
+                        $stt = $mysqli->prepare($rt);
+                        $stt->bind_param('si', $pat_id, $campus_id);
+                    } else {
+                        // campus column exists but user has no campus assigned: do not return any record
+                        $rt = "SELECT * FROM sendsignal WHERE 1 = 0";
+                        $stt = $mysqli->prepare($rt);
+                    }
+                } else {
+                    $rt = "SELECT * FROM sendsignal WHERE pat_code = ? LIMIT 1";
+                    $stt = $mysqli->prepare($rt);
+                    $stt->bind_param('s', $pat_id);
+                }
+                if ($stt) {
+                    $stt->execute();
+                    $rs = $stt->get_result();
+                    $rw = $rs ? $rs->fetch_object() : null;
+                    $time = $rw->Time ?? null;
+                } else {
+                    $rw = null; $time = null;
+                }
                  
                 /*$ret="SELECT  * FROM his_patients WHERE pat_id=?";
                 $stmt= $mysqli->prepare($ret);
