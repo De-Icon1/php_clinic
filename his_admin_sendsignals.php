@@ -148,7 +148,7 @@ elseif (strpos($ind, 'A') !== false) {
             $pics=$pic;
             
             // Get campus location ID from session
-            $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
+            $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : 0;
             
             // Check if sendsignal table has campus_id column
             $hascamp = 0;
@@ -158,8 +158,8 @@ elseif (strpos($ind, 'A') !== false) {
                 $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
             }
             
-            // Insert with campus_id if column exists
-            if ($hascamp && $campus_id) {
+            // ALWAYS insert campus_id if column exists (use 0 as default if no campus assigned)
+            if ($hascamp) {
                 $query="insert into sendsignal(pat_code,Fullname,Date,Time,Category,dob,picture,status,campus_id) values(?,?,?,?,?,?,?,?,?)";
                 $stmt = $mysqli->prepare($query);
                 $rc=$stmt->bind_param('ssssssssi',$pat_code,$fname,$rdate,$time,$category, $pat_dob,$pics,$status,$campus_id);
