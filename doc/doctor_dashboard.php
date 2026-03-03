@@ -5,15 +5,23 @@
   check_login();
   $doc_id=$_SESSION['doc_id'];
   $doc_number = $_SESSION['doc_number'];
-$campusid=$_SESSION['campus_id'];
+$campusid = isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
 
-function getcampus($campusid,$mysqli){
-    $sql="SELECT * FROM campus_locations where id=$campusid"; 
-   $result = mysqli_query($mysqli,$sql);
-    $num=mysqli_num_rows($result);
-    $reply = mysqli_fetch_array($result);
-    $name=$reply['name'];
-    return $name;
+function getcampus($campusid, $mysqli){
+    if (empty($campusid)) {
+        return 'All Campuses';
+    }
+    $stmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+    if (! $stmt) {
+        return 'Unknown Campus';
+    }
+    $stmt->bind_param('i', $campusid);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($row = $res->fetch_assoc()) {
+        return $row['name'];
+    }
+    return 'Unknown Campus';
 }
 ?>
 <!DOCTYPE html>

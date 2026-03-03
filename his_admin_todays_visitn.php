@@ -172,21 +172,19 @@
                                             // If the sendsignal table has a campus_id column we must strictly scope to the staff's campus.
                                             if ($hascamp) {
                                                 if ($campus_id) {
-                                                    // Strict: only show records assigned to this campus
+                                                    // Show records assigned to this campus, plus unassigned rows (0 or NULL).
+                                                    // This ensures signals created when session was not set still appear.
                                                     if ($status === 'All') {
-                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND campus_id = ? ORDER BY id DESC";
+                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND (campus_id = ? OR campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);
                                                         $stmt->bind_param('si', $rdate, $campus_id);
                                                     } else {
-                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND status = ? AND campus_id = ? ORDER BY id DESC";
+                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND status = ? AND (campus_id = ? OR campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);
                                                         $stmt->bind_param('ssi', $rdate, $status, $campus_id);
                                                     }
                                                 } else {
-                                                    // Column exists but user has no campus assigned.
-                                                    // Many live servers use 0 or NULL for unassigned sendsignal rows.
-                                                    // Show unassigned rows (campus_id = 0 or NULL) for today's date so staff
-                                                    // can still see signals created when their session wasn't set.
+                                                    // Column exists but user has no campus assigned: show only unassigned rows (0 or NULL).
                                                     if ($status === 'All') {
                                                         $ret = "SELECT * FROM sendsignal WHERE Date = ? AND (campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);

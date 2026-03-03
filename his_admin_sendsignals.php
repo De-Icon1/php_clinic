@@ -147,8 +147,12 @@ elseif (strpos($ind, 'A') !== false) {
             $fname=$pat_surn." ".$pat_fname." ".$pat_mname;
             $pics=$pic;
             
-            // Get campus location ID from session
-            $campus_id = isset($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : 0;
+            // Get campus location ID from session. Use NULL when not set so the DB stores NULL
+            // for unassigned signals instead of 0.
+            $campus_id = null;
+            if (isset($_SESSION['working_location_id']) && $_SESSION['working_location_id'] !== '') {
+                $campus_id = (int) $_SESSION['working_location_id'];
+            }
             
             // Check if sendsignal table has campus_id column
             $hascamp = 0;
@@ -158,15 +162,23 @@ elseif (strpos($ind, 'A') !== false) {
                 $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
             }
             
-            // ALWAYS insert campus_id if column exists (use 0 as default if no campus assigned)
-            if ($hascamp) {
-                $query="insert into sendsignal(pat_code,Fullname,Date,Time,Category,dob,picture,status,campus_id) values(?,?,?,?,?,?,?,?,?)";
+            // Insert campus_id only when the column exists AND we have a session campus set.
+            // If the column exists but there's no session campus, omit campus_id so the DB will
+            // store NULL (preferred over using 0 to indicate "unassigned").
+            if ($hascamp && $campus_id !== null) {
+                $query = "insert into sendsignal(pat_code,Fullname,Date,Time,Category,dob,picture,status,campus_id) values(?,?,?,?,?,?,?,?,?)";
                 $stmt = $mysqli->prepare($query);
-                $rc=$stmt->bind_param('ssssssssi',$pat_code,$fname,$rdate,$time,$category, $pat_dob,$pics,$status,$campus_id);
+                $rc = $stmt->bind_param('ssssssssi', $pat_code, $fname, $rdate, $time, $category, $pat_dob, $pics, $status, $campus_id);
+            } elseif ($hascamp) {
+                // Column exists but no campus in session: insert without campus_id column so it stays NULL
+                $query = "insert into sendsignal(pat_code,Fullname,Date,Time,Category,dob,picture,status) values(?,?,?,?,?,?,?,?)";
+                $stmt = $mysqli->prepare($query);
+                $rc = $stmt->bind_param('ssssssss', $pat_code, $fname, $rdate, $time, $category, $pat_dob, $pics, $status);
             } else {
-                $query="insert into sendsignal(pat_code,Fullname,Date,Time,Category,dob,picture,status) values(?,?,?,?,?,?,?,?)";
+                // Table has no campus_id column; fallback to original insert
+                $query = "insert into sendsignal(pat_code,Fullname,Date,Time,Category,dob,picture,status) values(?,?,?,?,?,?,?,?)";
                 $stmt = $mysqli->prepare($query);
-                $rc=$stmt->bind_param('ssssssss',$pat_code,$fname,$rdate,$time,$category, $pat_dob,$pics,$status);
+                $rc = $stmt->bind_param('ssssssss', $pat_code, $fname, $rdate, $time, $category, $pat_dob, $pics, $status);
             }
 			$stmt->execute();
 			/*
