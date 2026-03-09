@@ -55,8 +55,21 @@
                         </div>     
                         <!-- end page title --> 
                         
+                        <!-- Pharmacy Consumables Quick Access -->
+                        <div class="row">
+                            <div class="col-xl-12">
+                                <div class="card-box">
+                                    <h4 class="header-title mb-3">Consumables</h4>
+                                    <p class="text-muted">Quick actions for pharmacy consumables management.</p>
+                                    <div class="btn-group" role="group">
+                                        <a href="pharmacy_consumables.php" class="btn btn-primary">Manage Consumables</a>
+                                        <a href="pharmacy_consumables.php#add-stock" class="btn btn-success">Add Stock</a>
+                                        <a href="pharmacy_consumables.php#transfer" class="btn btn-warning">Transfer Stock</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                        
 
                         </div>
 

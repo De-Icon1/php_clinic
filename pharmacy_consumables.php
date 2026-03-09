@@ -426,7 +426,7 @@ if(isset($_GET['del_campus'])){
                 </div>
 
                 <!-- Add Consumable -->
-                <div class="card">
+                <div class="card" id="add-item">
                     <div class="card-body">
                         <h4>Add New Consumable</h4>
                         <form method="post">
@@ -448,7 +448,7 @@ if(isset($_GET['del_campus'])){
                 <hr>
 
                 <!-- Add Stock -->
-                <div class="card">
+                <div class="card" id="add-stock">
                     <div class="card-body">
                         <h4>Add Stock to Centre</h4>
                         <form method="post">
@@ -497,7 +497,7 @@ if(isset($_GET['del_campus'])){
                 <hr>
 
                 <!-- Transfer Stock -->
-                <div class="card">
+                <div class="card" id="transfer">
                     <div class="card-body">
                         <h4>Transfer Stock Between Campuses / Units</h4>
                         <form method="post">

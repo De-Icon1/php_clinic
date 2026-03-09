@@ -25,6 +25,20 @@
                                 </a>
                             </li>
 
+                            <li>
+                                <a href="pharmacy_consumables_pick.php">
+                                    <img src="./assets/img/box.png" width="30" height="30"></i>
+                                    <span>Pick Consumables</span>
+                                </a>
+                            </li>
+
+                            <li>
+                                <a href="pharmacy_consumables.php">
+                                    <img src="./assets/img/box.png" width="30" height="30"></i>
+                                    <span>Consumables</span>
+                                </a>
+                            </li>
+
                           
                             <li>
                                 <a href="record_logout.php">
