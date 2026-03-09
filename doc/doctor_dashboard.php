@@ -1,8 +1,23 @@
 <?php
-  session_start();
-  include('assets/inc/config.php');
-  include('assets/inc/checklogin.php');
-  check_login();
+    session_start();
+    include('assets/inc/config.php');
+    include('assets/inc/checklogin.php');
+
+    // Temporary diagnostics: enable error display and log request/session info.
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL);
+
+    // Write a small diagnostic file in the same directory for live debugging.
+    $diagPath = __DIR__ . DIRECTORY_SEPARATOR . 'debug_doctor_dashboard.log';
+    $diag = "[" . date('Y-m-d H:i:s') . "] doctor_dashboard diagnostic\n";
+    $diag .= "REQUEST_URI: " . ($_SERVER['REQUEST_URI'] ?? 'n/a') . "\n";
+    $diag .= "HTTP_HOST: " . ($_SERVER['HTTP_HOST'] ?? 'n/a') . "\n";
+    $diag .= "REMOTE_ADDR: " . ($_SERVER['REMOTE_ADDR'] ?? 'n/a') . "\n";
+    $diag .= "SESSION: " . print_r($_SESSION, true) . "\n\n";
+    @file_put_contents($diagPath, $diag, FILE_APPEND | LOCK_EX);
+
+    check_login();
   $doc_id=$_SESSION['doc_id'];
   $doc_number = $_SESSION['doc_number'];
 $campusid = isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;

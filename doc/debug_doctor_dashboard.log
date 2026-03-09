@@ -1,0 +1,14 @@
+[2026-03-03 15:06:51] doctor_dashboard diagnostic
+REQUEST_URI: /clinic/doc/doctor_dashboard.php
+HTTP_HOST: localhost
+REMOTE_ADDR: ::1
+SESSION: Array
+(
+    [campus_id] => 4
+    [working_location_id] => 4
+    [working_location] => Main Campus Health Centre
+    [doc_id] => 24
+    [doc_number] => CV6YOD
+)
+
+
