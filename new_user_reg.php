@@ -159,8 +159,8 @@
                                                         <option value="Pharmacy">Pharmacy Section</option>
                                                         <option value="Laboratory">Laboratory Section</option>
                                                         <option value="Nursing">Nursing Section</option>
-                                                        <option value="Cashier">Cashier Section</option>
                                                         <option value="Accounting">Accounting Section</option>
+                                                        <option value="Scan">Scan Section</option>
                                                         <option value="Administrator">Administrator Section</option>
                                                         <option value="Radiology">Radiology Section</option>
                                                         <option value="Records">Records Section</option>

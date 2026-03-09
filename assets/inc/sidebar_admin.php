@@ -45,6 +45,9 @@
                                         <a href="./lab_consumables.php">Setup Lab consumables</a>
                                     </li>
                                     <li>
+                                        <a href="./pharmacy_consumables.php">Setup Pharmacy consumables</a>
+                                    </li>
+                                    <li>
                                         <a href="setup_radiology.php">Setup Radiology </a>
                                     </li>
                                     <li>

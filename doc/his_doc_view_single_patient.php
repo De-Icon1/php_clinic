@@ -6,8 +6,8 @@
 
   $doc_id=$_SESSION['doc_id'];
   $campusid=$_SESSION['campus_id'];
-   $pat_id=$_GET['pat_id'];
-     $pat_name=$_GET['pat_name'];
+     $pat_id = isset($_GET['pat_id']) ? $_GET['pat_id'] : '';
+     $pat_name = isset($_GET['pat_name']) ? $_GET['pat_name'] : '';
   //$doc_number = $_SERVER['doc_number'];
     $date=date('Y-m-d');
 
@@ -15,6 +15,18 @@
 $campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
 
 // Pharmacy location selection for doctor (same pattern as nurse/lab working location)
+// Detect which table name exists in this installation: `pharmacy_location` or `pharmacy_locations`.
+$pharmacy_location_table = null;
+$res1 = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_location'");
+if ($res1 && $res1->fetch_assoc()['cnt']) {
+    $pharmacy_location_table = 'pharmacy_location';
+} else {
+    $res2 = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_locations'");
+    if ($res2 && $res2->fetch_assoc()['cnt']) {
+        $pharmacy_location_table = 'pharmacy_locations';
+    }
+}
+
 $pharmacy_location_id   = isset($_SESSION['pharmacy_location_id']) ? (int) $_SESSION['pharmacy_location_id'] : 0;
 $pharmacy_location_name = isset($_SESSION['pharmacy_location_name']) ? $_SESSION['pharmacy_location_name'] : '';
 
@@ -23,24 +35,34 @@ if (isset($_POST['set_pharmacy_location'])) {
     $loc = $_POST['pharmacy_location'];
     if (is_numeric($loc)) {
         $id = (int) $loc;
-        $stmt = $mysqli->prepare("SELECT name FROM pharmacy_location WHERE id = ? LIMIT 1");
-        if ($stmt) {
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($row = $res->fetch_assoc()) {
-                $_SESSION['pharmacy_location_id']   = $id;
-                $_SESSION['pharmacy_location_name'] = $row['name'];
-                $pharmacy_location_id   = $id;
-                $pharmacy_location_name = $row['name'];
-            } else {
-                // store id even if name missing
-                $_SESSION['pharmacy_location_id']   = $id;
-                $_SESSION['pharmacy_location_name'] = '';
-                $pharmacy_location_id   = $id;
-                $pharmacy_location_name = '';
+        // Use detected table name if available
+        if ($pharmacy_location_table) {
+            $sql = "SELECT name FROM {$pharmacy_location_table} WHERE id = ? LIMIT 1";
+            $stmt = $mysqli->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('i', $id);
+                $stmt->execute();
+                $res = $stmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $_SESSION['pharmacy_location_id']   = $id;
+                    $_SESSION['pharmacy_location_name'] = $row['name'];
+                    $pharmacy_location_id   = $id;
+                    $pharmacy_location_name = $row['name'];
+                } else {
+                    // store id even if name missing
+                    $_SESSION['pharmacy_location_id']   = $id;
+                    $_SESSION['pharmacy_location_name'] = '';
+                    $pharmacy_location_id   = $id;
+                    $pharmacy_location_name = '';
+                }
+                $stmt->close();
             }
-            $stmt->close();
+        } else {
+            // No locations table found; still store id so other code can use it
+            $_SESSION['pharmacy_location_id']   = $id;
+            $_SESSION['pharmacy_location_name'] = '';
+            $pharmacy_location_id   = $id;
+            $pharmacy_location_name = '';
         }
     }
 
@@ -193,59 +215,61 @@ function getcampus($campusid,$mysqli){
     return $name;
 }
 
- if (isset($_POST['prdrug'])) {
+if (isset($_POST['prdrug'])) {
     $date = date('Y-m-d');
     $drug = trim($_POST['drug']);
-    $qnt = trim($_POST['qnt']);
-    $const = trim($_POST['const']);
+    $qnt = floatval(trim($_POST['qnt']));
+    $const_raw = trim($_POST['const']);
     $dcate = trim($_POST['dcate']);
-    $duration = trim($_POST['duration']);
+    $duration_raw = trim($_POST['duration']);
 
-    // Helper functions to calculate hours and duration
-    $dur = getdurtn($duration);
-    $hly = gethly($const);
+    // Normalize/parse duration and frequency
+    $dur = getdurtn($duration_raw);
+    $hly = gethly($const_raw);
 
-    // Total dosage over full duration
-    $tot = $qnt * $hly * $dur;
+    // Total dosage over full duration (ensure numeric math)
+    $tot = floatval($qnt) * floatval($hly) * floatval($dur);
 
-    // Display string for table
-    $totdrug = $tot . $dcate;
+    // Build display string for table (no numeric-to-string concatenation before math)
+    if (intval($tot) == $tot) {
+        $tot_display = intval($tot) . $dcate;
+    } else {
+        $tot_display = rtrim(rtrim(number_format($tot, 4, '.', ''), '0'), '.') . $dcate;
+    }
 
-    // ✅ Insert properly using prepared statement with field names
-   $sql = "INSERT INTO drug_prescription 
-(date, patid, name, drug, qnt, const, duration, total, totdrug, amount, cate)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-$stmt = $mysqli->prepare($sql);
+    // Ensure we have a numeric id to insert in case the table's `id` is not AUTO_INCREMENT
+    $nid_res = $mysqli->query("SELECT IFNULL(MAX(id),0)+1 AS nid FROM drug_prescription");
+    $new_id = 1;
+    if ($nid_res) {
+        $nid_row = $nid_res->fetch_assoc();
+        $new_id = (int) ($nid_row['nid'] ?? 1);
+    }
 
-if (!$stmt) {
-    die("Prepare failed: " . $mysqli->error);
-}
+    // Insert using prepared statement with explicit field names (including id)
+    $sql = "INSERT INTO drug_prescription 
+(id, date, patid, name, drug, qnt, const, duration, total, totdrug, amount, cate)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    $stmt = $mysqli->prepare($sql);
 
-// Compute total amount (respect doctor's campus if available)
-$dtot = getdrugtot($mysqli, $drug, $tot, $campus_id);
+    if (!$stmt) {
+        die("Prepare failed: " . $mysqli->error);
+    }
 
-// Guarantee a numeric value
-if (!isset($dtot) || $dtot === null || $dtot === '' || !is_numeric($dtot)) {
-    $dtot = 0;
-}
+    // Compute total amount (respect doctor's campus if available)
+    $dtot = getdrugtot($mysqli, $drug, $tot, $campus_id);
+    if (!isset($dtot) || $dtot === null || $dtot === '' || !is_numeric($dtot)) {
+        $dtot = 0;
+    }
 
-error_log("DEBUG: About to insert drug_prescription with dtot={$dtot}");
+    $stmt->bind_param('isssssssssss',
+        $new_id, $date, $pat_id, $pat_name, $drug, $qnt, $const_raw, $duration_raw, $tot, $tot_display, $dtot, $dcate
+    );
 
-$stmt->bind_param('sssssssssss',
-    $date, $pat_id, $pat_name, $drug, $qnt, $const, $duration, $tot, $totdrug, $dtot, $dcate
-);
+    if (!$stmt->execute()) {
+        die("Execute failed: " . $stmt->error);
+    }
 
-// Debug check before executing
-error_log("Executing insert with amount = " . $dtot);
-
-if (!$stmt->execute()) {
-    die("Execute failed: " . $stmt->error);
-}
-
-        $success = "Drug processed successfully!";
-   // } else {
-    //    $err = "Error processing drug. Please try again.";
-   // }
+    $success = "Drug processed successfully!";
 }
 
 
@@ -285,8 +309,23 @@ if (!$stmt->execute()) {
                 $totdrug=$reply['totdrug'];
                 $amnt=$reply['amount'];
                  $cate=$reply['cate'];
-                 $sql="insert into patient_drug_history values(0,'$date','$pat_id','$pat_name','$drug','$qnt','$const','$duration','$total','$totdrug','$amnt','$cate')";
-                  $sq=mysqli_query($mysqli,$sql); 
+                 // Insert into patient_drug_history using explicit id in case table lacks AUTO_INCREMENT
+                 $ph_nid_res = $mysqli->query("SELECT IFNULL(MAX(id),0)+1 AS nid FROM patient_drug_history");
+                 $ph_new_id = 1;
+                 if ($ph_nid_res) {
+                     $ph_row = $ph_nid_res->fetch_assoc();
+                     $ph_new_id = (int) ($ph_row['nid'] ?? 1);
+                 }
+                 $ph_stmt = $mysqli->prepare("INSERT INTO patient_drug_history (id, date, patid, name, drug, qnt, const, duration, total, totdrug, amount, cate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                 if ($ph_stmt) {
+                     $ph_stmt->bind_param('isssssssssss', $ph_new_id, $date, $pat_id, $pat_name, $drug, $qnt, $const, $duration, $total, $totdrug, $amnt, $cate);
+                     $ph_stmt->execute();
+                     $ph_stmt->close();
+                 } else {
+                     // fallback to legacy insert (may fail if id has no default)
+                     $sql = "INSERT INTO patient_drug_history VALUES(0,'$date','$pat_id','$pat_name','$drug','$qnt','$const','$duration','$total','$totdrug','$amnt','$cate')";
+                     $sq = mysqli_query($mysqli, $sql);
+                 }
 
                    // Insert pharmacy order and include campus/location when available
                    // Align with DB schema: pharmacy_order columns per hospital.sql
@@ -479,43 +518,50 @@ function getPattotdrug($mysqli,$date,$pid){
 
         }
 function getdurtn($val){
-    if($val=='7/7'){
-        return 7;
-    }else if($val=='6/7'){
-        return 6;
-    }else if($val=='5/7'){
-        return 5;
-    }else if($val=='4/7'){
-        return 4;
-    }else if($val=='3/7'){
-        return 3;
-    }else if($val=='2/7'){
-        return 2;
-    }else if($val=='1/7'){
-        return 1;
-    }else{
-        return 0;
+    $v = trim($val);
+    if ($v === '') return 0;
+
+    // If duration is a fraction like "1/7", return the numerator (1)
+    if (preg_match('/^(\d+)\s*\/\s*(\d+)$/', $v, $m)) {
+        return intval($m[1]);
     }
+
+    // If a plain number was provided (e.g., "7"), return that
+    if (preg_match('/(\d+)/', $v, $m)) {
+        return intval($m[1]);
+    }
+
+    return 0;
 }
-  function gethly($val){
-    if($val=='24hly'){
-        return 1;
-    }else if($val=='12hly'){
-        return 2;
-    }else if($val=='8hly'){
-        return 3;
-    }else if($val=='6hly'){
-        return 4;
-    }else if($val=='4hly'){
-        return 6;
-    }else if($val=='3hly'){
-        return 8;
-    }else if($val=='2hly'){
-        return 10;
-    }else{
-        return 0;
+
+function gethly($val){
+    $v = strtolower(trim($val));
+    if ($v === '') return 0;
+
+    // If a numeric hour is provided (e.g., "12" or "12hly"), compute doses per 24h
+    if (preg_match('/(\d+(?:\.\d+)?)/', $v, $m)) {
+        $hours = floatval($m[1]);
+        if ($hours > 0) {
+            // compute times per day; ensure at least 1
+            $times = intval(round(24 / $hours));
+            return max(1, $times);
+        }
     }
-  }
+
+    // Fallback mapping for legacy tokens
+    $map = [
+        '24hly' => 1,
+        '12hly' => 2,
+        '8hly'  => 3,
+        '6hly'  => 4,
+        '4hly'  => 6,
+        '3hly'  => 8,
+        '2hly'  => 10,
+    ];
+    if (isset($map[$v])) return $map[$v];
+
+    return 0;
+}
 ?>
 
 <!DOCTYPE html>
@@ -543,8 +589,8 @@ function getdurtn($val){
             <!--Get Details Of A Single User And Display Them Here-->
 
             <?php
-                 $pat_id=isset($_GET['pat_id']) ? $_GET['pat_id'] : null;
-                 $pat_name=isset($_GET['pat_name']) ? $_GET['pat_name'] : null;
+                 $pat_id = isset($_GET['pat_id']) ? $_GET['pat_id'] : '';
+                 $pat_name = isset($_GET['pat_name']) ? $_GET['pat_name'] : '';
                 // Apply campus scoping for sendsignal lookup
                 $campus_id = isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id']) ? (int)$_SESSION['campus_id'] : null);
                 $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
@@ -866,12 +912,17 @@ if ($stmt) {
                                                                 <select id="pharmacy_location_select" name="pharmacy_location" class="form-control">
                                                                     <option value="">-- Select --</option>
                                                                     <?php
-                                                                    $pl_res = $mysqli->query("SELECT id, name FROM pharmacy_location ORDER BY name ASC");
-                                                                    if ($pl_res) {
-                                                                        while ($pl = $pl_res->fetch_assoc()) {
-                                                                            $selected = (!empty($pharmacy_location_id) && (int)$pharmacy_location_id === (int)$pl['id']) ? 'selected' : '';
-                                                                            echo "<option value='".intval($pl['id'])."' " . $selected . ">".htmlspecialchars($pl['name'])."</option>";
+                                                                    // Use the detected locations table name if available
+                                                                    if (!empty($pharmacy_location_table)) {
+                                                                        $pl_res = $mysqli->query("SELECT id, name FROM " . $pharmacy_location_table . " ORDER BY name ASC");
+                                                                        if ($pl_res) {
+                                                                            while ($pl = $pl_res->fetch_assoc()) {
+                                                                                $selected = (!empty($pharmacy_location_id) && (int)$pharmacy_location_id === (int)$pl['id']) ? 'selected' : '';
+                                                                                echo "<option value='".intval($pl['id'])."' " . $selected . ">".htmlspecialchars($pl['name'])."</option>";
+                                                                            }
                                                                         }
+                                                                    } else {
+                                                                        // No locations table found — nothing to list here.
                                                                     }
                                                                     ?>
                                                                 </select>

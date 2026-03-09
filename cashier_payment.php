@@ -90,7 +90,7 @@ if(isset($_GET['dels'])){
             $bank=$_POST['bank'];
             $code=getbankacc($mysqli,$bank);
             $amnt=$_POST['amnt'];
-            $sql="insert into cart_pay values(0,'$date','$bank','$code','$amnt','$mode')";
+            $sql="insert into cart_pay values(NULL,'$date','$bank','$code','$amnt','$mode')";
             $sq=mysqli_query($mysqli,$sql); 
 
         }
@@ -179,7 +179,7 @@ if(isset($_POST['payment'])){
                         $details=$reply['details'];
                         $amount=$reply['amount'];
                          
-                            $inv =$mysqli->query("insert into invoice values(0,'$date','$teller','$customer','$details','$time','$amount','$amount','$officer')");
+                            $inv =$mysqli->query("insert into invoice values(NULL,'$date','$teller','$customer','$details','$time','$amount','$amount','$officer')");
 
                     }
 
@@ -190,10 +190,10 @@ if(isset($_POST['payment'])){
                         $amount=$replys['amount'];
                         $mode=$replys['mode'];
                          
-                              $sqs =$mysqli->query("insert into payment values(0,'$date','$teller','$customer','$bank','$mode','$amount','$officer')");
-                               $csh =$mysqli->query("insert into cashbook values(0,'$date','$teller','$time','$customer','$amount','0','0','0','$officer')");
-                                $jorn =$mysqli->query("insert into journal values(0, '$date','100','Cash Account','0','$amount','$officer')");
-                                $jorn2 =$mysqli->query("insert into journal values(0, '$date','101','Sales Account','$amount','0','$officer')");
+                                                            $sqs =$mysqli->query("insert into payment values(NULL,'$date','$teller','$customer','$bank','$mode','$amount','$officer')");
+                                                             $csh =$mysqli->query("insert into cashbook values(NULL,'$date','$teller','$time','$customer','$amount','0','0','0','$officer')");
+                                                                $jorn =$mysqli->query("insert into journal values(NULL, '$date','100','Cash Account','0','$amount','$officer')");
+                                                                $jorn2 =$mysqli->query("insert into journal values(NULL, '$date','101','Sales Account','$amount','0','$officer')");
                     }
                     echo "<script>location='receipt.php?inv=$teller&date=$date'</script>";
                      $sqls =$mysqli->query("delete from cart");
@@ -223,7 +223,7 @@ if(isset($_POST['pharmacy'])){
                           $qnt=$reply['Qnt'];
                            $const=$reply['const'];
                          
-                            $inv =$mysqli->query("insert into pharmacy_invoice values(0,'$date','$time','$customer','$tid','$drug','$qnt','$amount','$const','$officer')");
+                            $inv =$mysqli->query("insert into pharmacy_invoice values(NULL,'$date','$time','$customer','$tid','$drug','$qnt','$amount','$const','$officer')");
 
                     }
 
@@ -238,10 +238,10 @@ if(isset($_POST['pharmacy'])){
                         $amntp=$_POST['amntp'];
                         $modep=$_POST['modep'];
                          
-                              $sqs =$mysqli->query("insert into payment values(0,'$date','$tid','$customer','$bankp','$modep','$amntp','$officer')");
-                               $csh =$mysqli->query("insert into cashbook values(0,'$date','$tid','$time','$customer','$amntp','0','0','0','$officer')");
-                                $jorn =$mysqli->query("insert into journal values(0, '$date','100','Cash Account','0','$amntp','$officer')");
-                                $jorn2 =$mysqli->query("insert into journal values(0, '$date','101','Sales Account','$amntp','0','$officer')");
+                                                            $sqs =$mysqli->query("insert into payment values(NULL,'$date','$tid','$customer','$bankp','$modep','$amntp','$officer')");
+                                                             $csh =$mysqli->query("insert into cashbook values(NULL,'$date','$tid','$time','$customer','$amntp','0','0','0','$officer')");
+                                                                $jorn =$mysqli->query("insert into journal values(NULL, '$date','100','Cash Account','0','$amntp','$officer')");
+                                                                $jorn2 =$mysqli->query("insert into journal values(NULL, '$date','101','Sales Account','$amntp','0','$officer')");
                     }
                     echo "<script>location='phar_receipt.php?inv=$tid&date=$date'</script>";
                      $sqls =$mysqli->query("update pharmacy_order set status='Paid' where trackid='$tid'");
