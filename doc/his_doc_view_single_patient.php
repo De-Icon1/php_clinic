@@ -327,77 +327,71 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                      $sq = mysqli_query($mysqli, $sql);
                  }
 
-                   // Insert pharmacy order and include campus/location when available
+                 // Insert pharmacy order and include campus/location when available
                    // Align with DB schema: pharmacy_order columns per hospital.sql
                    // (`id`, `trackid`, `customer`, `drug`, `Qnt`, `const`, `amount`, `status`, `date`)
-                   $order_cols = "trackid, customer, drug, Qnt, const, amount, status, date";
-                   $order_values = array($pat_id, $pat_name, $drug, $qnt, $const, $amnt, 'Not Paid', $date);
+
+                   // Compute a safe id in case pharmacy_order.id is not AUTO_INCREMENT
+                   $po_nid_res = $mysqli->query("SELECT IFNULL(MAX(id),0)+1 AS nid FROM pharmacy_order");
+                   $order_id = 1;
+                   if ($po_nid_res) {
+                       $po_row = $po_nid_res->fetch_assoc();
+                       $order_id = (int) ($po_row['nid'] ?? 1);
+                   }
+
+                   // Base columns and values
+                   $order_cols = array('id', 'trackid', 'customer', 'drug', 'Qnt', 'const', 'amount', 'status', 'date');
+                   $order_values = array($order_id, $pat_id, $pat_name, $drug, $qnt, $const, $amnt, 'Not Paid', $date);
 
                    // Check if pharmacy_order has campus_id / pharmacy_location_id columns
                    $order_campus_col = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
                    $order_loc_col    = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='pharmacy_location_id'")->fetch_assoc()['cnt'] ?? 0;
 
                    if ($order_campus_col && $campus_id) {
-                       $order_cols .= ", campus_id";
-                       $order_params .= ",?";
-                       $order_values[] = $campus_id;
+                       $order_cols[] = 'campus_id';
+                       $order_values[] = (int)$campus_id;
                    }
 
                    $pharmacy_location_id_for_order = isset($_SESSION['pharmacy_location_id']) ? (int) $_SESSION['pharmacy_location_id'] : null;
                    if ($order_loc_col && $pharmacy_location_id_for_order) {
-                       $order_cols .= ", pharmacy_location_id";
-                       $order_params .= ",?";
-                       $order_values[] = $pharmacy_location_id_for_order;
+                       $order_cols[] = 'pharmacy_location_id';
+                       $order_values[] = (int)$pharmacy_location_id_for_order;
                    }
 
                    // Build prepared statement dynamically and bind robustly
-                   $placeholders = implode(',', array_fill(0, count($order_values), '?'));
-                   $ins_sql = "INSERT INTO pharmacy_order ($order_cols";
-                   // append optional campus/location columns
-                   if ($order_campus_col && $campus_id) {
-                       $ins_sql .= ", campus_id";
-                   }
-                   if ($order_loc_col && $pharmacy_location_id_for_order) {
-                       $ins_sql .= ", pharmacy_location_id";
-                   }
-                   $ins_sql .= ") VALUES ($placeholders";
-                   if ($order_campus_col && $campus_id) { $ins_sql .= ',?'; }
-                   if ($order_loc_col && $pharmacy_location_id_for_order) { $ins_sql .= ',?'; }
-                   $ins_sql .= ')';
+                   $placeholders = implode(',', array_fill(0, count($order_cols), '?'));
+                   $ins_sql = "INSERT INTO pharmacy_order (" . implode(',', $order_cols) . ") VALUES ($placeholders)";
 
                    $ins_stmt = $mysqli->prepare($ins_sql);
                    if ($ins_stmt) {
                        // build types string and references for bind_param
                        $types = '';
                        $refs = array();
-                       foreach ($order_values as $k => $v) {
-                           $types .= is_int($v) ? 'i' : 's';
-                           $refs[$k] = &$order_values[$k];
-                       }
-                       if ($order_campus_col && $campus_id) {
-                           $types .= 'i';
-                           $order_values[] = $campus_id;
-                           $refs[] = &$order_values[count($order_values)-1];
-                       }
-                       if ($order_loc_col && $pharmacy_location_id_for_order) {
-                           $types .= 'i';
-                           $order_values[] = $pharmacy_location_id_for_order;
-                           $refs[] = &$order_values[count($order_values)-1];
+                       foreach ($order_values as $idx => $val) {
+                           // id, campus_id, pharmacy_location_id are ints; others can be bound as strings safely
+                           if (is_int($val)) {
+                               $types .= 'i';
+                           } else {
+                               $types .= 's';
+                           }
+                           $refs[$idx] = &$order_values[$idx];
                        }
                        array_unshift($refs, $types);
                        call_user_func_array(array($ins_stmt, 'bind_param'), $refs);
                        $ins_stmt->execute();
                    } else {
-                       // fallback: explicit column list (safer than relying on table order)
-                       $fallback_cols = "(trackid, customer, drug, Qnt, const, amount, status, date";
-                       if ($order_campus_col && $campus_id) { $fallback_cols .= ", campus_id"; }
-                       if ($order_loc_col && $pharmacy_location_id_for_order) { $fallback_cols .= ", pharmacy_location_id"; }
-                       $fallback_cols .= ')';
-                       $sqll = "INSERT INTO pharmacy_order $fallback_cols VALUES (0,'$pat_id','$pat_name','$drug','$qnt','$const','$amnt','Not Paid','$date'";
-                       if ($order_campus_col && $campus_id) { $sqll .= "," . intval($campus_id); }
-                       if ($order_loc_col && $pharmacy_location_id_for_order) { $sqll .= "," . intval($pharmacy_location_id_for_order); }
-                       $sqll .= ')';
-                       $sqs = mysqli_query($mysqli,$sqll);
+                       // Fallback: no prepared statement; attempt legacy-style insert including explicit id
+                       $cols_str = '(' . implode(',', $order_cols) . ')';
+                       $vals = array();
+                       foreach ($order_values as $v) {
+                           if (is_int($v)) {
+                               $vals[] = (string)intval($v);
+                           } else {
+                               $vals[] = "'" . $mysqli->real_escape_string($v) . "'";
+                           }
+                       }
+                       $sqll = "INSERT INTO pharmacy_order $cols_str VALUES (" . implode(',', $vals) . ")";
+                       $sqs = mysqli_query($mysqli, $sqll);
                    }
 
                   $sdel="delete from drug_prescription where date='$date' and patid='$pat_id'";
