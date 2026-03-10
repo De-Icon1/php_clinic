@@ -1,8 +1,7 @@
 <?php
-  session_start();
-  include('assets/inc/config.php');
-  include('assets/inc/checklogin.php');
-  check_login();
+    include('assets/inc/config.php');
+    include('assets/inc/checklogin.php');
+    check_login();
 
   $doc_id=$_SESSION['doc_id'];
   $campusid=$_SESSION['campus_id'];
@@ -207,11 +206,22 @@ if(isset($_GET['dels'])){
     
 
 function getcampus($campusid,$mysqli){
-    $sql="SELECT * FROM campus_locations where id=$campusid"; 
-   $result = mysqli_query($mysqli,$sql);
-    $num=mysqli_num_rows($result);
-    $reply = mysqli_fetch_array($result);
-    $name=$reply['name'];
+    // Gracefully handle missing/invalid campus id to avoid SQL errors
+    if (empty($campusid) || !is_numeric($campusid)) {
+        return 'Unknown Campus';
+    }
+
+    $name = 'Unknown Campus';
+    if ($stmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1")) {
+        $cid = (int)$campusid;
+        $stmt->bind_param('i', $cid);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            $name = $row['name'];
+        }
+        $stmt->close();
+    }
     return $name;
 }
 
@@ -284,19 +294,75 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $proamnt = isset($_POST['proamnt']) ? floatval($_POST['proamnt']) : 0;
     $cons    = isset($_POST['cons'])    ? floatval($_POST['cons'])    : 0;
     $totbill=$proamnt + $cons;
-    // Use prepared statements for inserts
-    $dstmt = $mysqli->prepare("INSERT INTO outpatient_visist_record (date, patid, name, diagnosis, proceedure, plan, doc_incharge) VALUES (?, ?, ?, ?, ?, ?, '')");
-    if ($dstmt) {
-        $dstmt->bind_param('sissss', $date, $pat_id, $pat_name, $diag, $pro, $plan);
-        $dstmt->execute();
-        $dstmt->close();
+
+    // Compute explicit ids for visit record and patient bill in case their id columns lack AUTO_INCREMENT
+    $ovr_id = 1;
+    if ($resOv = $mysqli->query("SELECT IFNULL(MAX(id),0)+1 AS nid FROM outpatient_visist_record")) {
+        if ($rowOv = $resOv->fetch_assoc()) {
+            $ovr_id = (int)($rowOv['nid'] ?? 1);
+        }
     }
 
-    $pstmt = $mysqli->prepare("INSERT INTO patient_bill (date, patid, name, const, proceedure, total, doc_incharge) VALUES (?, ?, ?, ?, ?, ?, '')");
-    if ($pstmt) {
-        $pstmt->bind_param('sissds', $date, $pat_id, $pat_name, $cons, $proamnt, $totbill);
-        $pstmt->execute();
-        $pstmt->close();
+    $pb_id = 1;
+    if ($resPb = $mysqli->query("SELECT IFNULL(MAX(id),0)+1 AS nid FROM patient_bill")) {
+        if ($rowPb = $resPb->fetch_assoc()) {
+            $pb_id = (int)($rowPb['nid'] ?? 1);
+        }
+    }
+
+    // Use prepared statements for inserts, accounting for possible legacy `amnt` columns
+    // Check if outpatient_visist_record has an 'amnt' column
+    $ovr_has_amnt = 0;
+    if ($ovr_col_res = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='outpatient_visist_record' AND COLUMN_NAME='amnt'")) {
+        if ($ovr_col_row = $ovr_col_res->fetch_assoc()) {
+            $ovr_has_amnt = (int)($ovr_col_row['cnt'] ?? 0);
+        }
+    }
+
+    if ($ovr_has_amnt) {
+        // Newer/legacy schema with explicit amnt column
+        $dstmt = $mysqli->prepare("INSERT INTO outpatient_visist_record (id, date, patid, name, diagnosis, proceedure, plan, doc_incharge, amnt) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?)");
+        if ($dstmt) {
+            $dstmt->bind_param('isissssd', $ovr_id, $date, $pat_id, $pat_name, $diag, $pro, $plan, $totbill);
+            $dstmt->execute();
+            $dstmt->close();
+        }
+    } else {
+        // Original schema without amnt column
+        $dstmt = $mysqli->prepare("INSERT INTO outpatient_visist_record (id, date, patid, name, diagnosis, proceedure, plan, doc_incharge) VALUES (?, ?, ?, ?, ?, ?, ?, '')");
+        if ($dstmt) {
+            $dstmt->bind_param('isissss', $ovr_id, $date, $pat_id, $pat_name, $diag, $pro, $plan);
+            $dstmt->execute();
+            $dstmt->close();
+        }
+    }
+
+    // Check if patient_bill has an 'amnt' column
+    $pb_has_amnt = 0;
+    if ($pb_col_res = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='patient_bill' AND COLUMN_NAME='amnt'")) {
+        if ($pb_col_row = $pb_col_res->fetch_assoc()) {
+            $pb_has_amnt = (int)($pb_col_row['cnt'] ?? 0);
+        }
+    }
+
+    if ($pb_has_amnt) {
+        // Schema with amnt column; populate it with the total bill
+        $pstmt = $mysqli->prepare("INSERT INTO patient_bill (id, date, patid, name, const, proceedure, total, doc_incharge, amnt) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?)");
+        if ($pstmt) {
+            // Types: id (i), date (s), patid (i), name (s), const (s), proceedure (s/num), total (s), amnt (d)
+            $pstmt->bind_param('isissdsd', $pb_id, $date, $pat_id, $pat_name, $cons, $proamnt, $totbill, $totbill);
+            $pstmt->execute();
+            $pstmt->close();
+        }
+    } else {
+        // Original schema without amnt column
+        $pstmt = $mysqli->prepare("INSERT INTO patient_bill (id, date, patid, name, const, proceedure, total, doc_incharge) VALUES (?, ?, ?, ?, ?, ?, ?, '')");
+        if ($pstmt) {
+            // Keep types largely consistent with legacy usage, adding leading int for id
+            $pstmt->bind_param('isissds', $pb_id, $date, $pat_id, $pat_name, $cons, $proamnt, $totbill);
+            $pstmt->execute();
+            $pstmt->close();
+        }
     }
 
      $result=mysqli_query($mysqli,"select * from drug_prescription where date='$date' and patid='$pat_id'");
@@ -316,20 +382,56 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                      $ph_row = $ph_nid_res->fetch_assoc();
                      $ph_new_id = (int) ($ph_row['nid'] ?? 1);
                  }
-                 $ph_stmt = $mysqli->prepare("INSERT INTO patient_drug_history (id, date, patid, name, drug, qnt, const, duration, total, totdrug, amount, cate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                 if ($ph_stmt) {
-                     $ph_stmt->bind_param('isssssssssss', $ph_new_id, $date, $pat_id, $pat_name, $drug, $qnt, $const, $duration, $total, $totdrug, $amnt, $cate);
-                     $ph_stmt->execute();
-                     $ph_stmt->close();
+                 // Check if patient_drug_history has 'amount' and/or legacy 'amnt' columns in this DB
+                 $pdh_has_amount = 0;
+                 $pdh_has_amnt   = 0;
+
+                 if ($pdh_col_res = $mysqli->query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='patient_drug_history' AND COLUMN_NAME IN ('amount','amnt')")) {
+                     while ($pdh_row = $pdh_col_res->fetch_assoc()) {
+                         if ($pdh_row['COLUMN_NAME'] === 'amount') {
+                             $pdh_has_amount = 1;
+                         } elseif ($pdh_row['COLUMN_NAME'] === 'amnt') {
+                             $pdh_has_amnt = 1;
+                         }
+                     }
+                 }
+
+                 if ($pdh_has_amount && $pdh_has_amnt) {
+                     // Schema with both amount and amnt columns; populate both
+                     $ph_stmt = $mysqli->prepare("INSERT INTO patient_drug_history (id, date, patid, name, drug, qnt, const, duration, total, totdrug, amount, amnt, cate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                     if ($ph_stmt) {
+                         $ph_stmt->bind_param('issssssssssss', $ph_new_id, $date, $pat_id, $pat_name, $drug, $qnt, $const, $duration, $total, $totdrug, $amnt, $amnt, $cate);
+                         $ph_stmt->execute();
+                         $ph_stmt->close();
+                     }
+                 } elseif ($pdh_has_amount) {
+                     // Schema with amount column only
+                     $ph_stmt = $mysqli->prepare("INSERT INTO patient_drug_history (id, date, patid, name, drug, qnt, const, duration, total, totdrug, amount, cate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                     if ($ph_stmt) {
+                         $ph_stmt->bind_param('isssssssssss', $ph_new_id, $date, $pat_id, $pat_name, $drug, $qnt, $const, $duration, $total, $totdrug, $amnt, $cate);
+                         $ph_stmt->execute();
+                         $ph_stmt->close();
+                     }
+                 } elseif ($pdh_has_amnt) {
+                     // Schema with legacy amnt column only
+                     $ph_stmt = $mysqli->prepare("INSERT INTO patient_drug_history (id, date, patid, name, drug, qnt, const, duration, total, totdrug, amnt, cate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                     if ($ph_stmt) {
+                         $ph_stmt->bind_param('isssssssssss', $ph_new_id, $date, $pat_id, $pat_name, $drug, $qnt, $const, $duration, $total, $totdrug, $amnt, $cate);
+                         $ph_stmt->execute();
+                         $ph_stmt->close();
+                     }
                  } else {
-                     // fallback to legacy insert (may fail if id has no default)
-                     $sql = "INSERT INTO patient_drug_history VALUES(0,'$date','$pat_id','$pat_name','$drug','$qnt','$const','$duration','$total','$totdrug','$amnt','$cate')";
-                     $sq = mysqli_query($mysqli, $sql);
+                     // Schema without amount/amnt columns
+                     $ph_stmt = $mysqli->prepare("INSERT INTO patient_drug_history (id, date, patid, name, drug, qnt, const, duration, total, totdrug, cate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                     if ($ph_stmt) {
+                         $ph_stmt->bind_param('issssssssss', $ph_new_id, $date, $pat_id, $pat_name, $drug, $qnt, $const, $duration, $total, $totdrug, $cate);
+                         $ph_stmt->execute();
+                         $ph_stmt->close();
+                     }
                  }
 
                  // Insert pharmacy order and include campus/location when available
-                   // Align with DB schema: pharmacy_order columns per hospital.sql
-                   // (`id`, `trackid`, `customer`, `drug`, `Qnt`, `const`, `amount`, `status`, `date`)
+                   // Align with DB schema: pharmacy_order columns may use either `amount` or legacy `amnt`
 
                    // Compute a safe id in case pharmacy_order.id is not AUTO_INCREMENT
                    $po_nid_res = $mysqli->query("SELECT IFNULL(MAX(id),0)+1 AS nid FROM pharmacy_order");
@@ -339,13 +441,25 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                        $order_id = (int) ($po_row['nid'] ?? 1);
                    }
 
-                   // Base columns and values
-                   $order_cols = array('id', 'trackid', 'customer', 'drug', 'Qnt', 'const', 'amount', 'status', 'date');
-                   $order_values = array($order_id, $pat_id, $pat_name, $drug, $qnt, $const, $amnt, 'Not Paid', $date);
+                   // Base columns and values (amount/amnt columns appended conditionally below)
+                   $order_cols = array('id', 'trackid', 'customer', 'drug', 'Qnt', 'const', 'status', 'date');
+                   $order_values = array($order_id, $pat_id, $pat_name, $drug, $qnt, $const, 'Not Paid', $date);
 
-                   // Check if pharmacy_order has campus_id / pharmacy_location_id columns
+                   // Check if pharmacy_order has amount / amnt and campus_id / pharmacy_location_id columns
+                   $order_amount_col = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='amount'")->fetch_assoc()['cnt'] ?? 0;
+                   $order_amnt_col   = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='amnt'")->fetch_assoc()['cnt'] ?? 0;
                    $order_campus_col = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
                    $order_loc_col    = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='pharmacy_location_id'")->fetch_assoc()['cnt'] ?? 0;
+
+                   // Prefer to populate whichever amount-style columns exist in this DB
+                   if ($order_amount_col) {
+                       $order_cols[] = 'amount';
+                       $order_values[] = $amnt;
+                   }
+                   if ($order_amnt_col) {
+                       $order_cols[] = 'amnt';
+                       $order_values[] = $amnt;
+                   }
 
                    if ($order_campus_col && $campus_id) {
                        $order_cols[] = 'campus_id';

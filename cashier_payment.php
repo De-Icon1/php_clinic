@@ -160,6 +160,33 @@ function getphartot($mysqli,$date,$tid){
             
             return $name;
         }
+// Safely insert into journal with retry on duplicate primary key
+function safeInsertJournal($mysqli, $date, $code, $accountName, $debit, $credit) {
+    $attempts = 0;
+    while ($attempts < 5) {
+        $jid = 1;
+        if ($res = $mysqli->query("SELECT IFNULL(MAX(id),0)+1 AS nid FROM journal")) {
+            if ($row = $res->fetch_assoc()) {
+                $jid = (int)($row['nid'] ?? 1);
+            }
+        }
+
+        $sql = "insert into journal values(".$jid.", '$date', '$code', '$accountName', '$debit', '$credit', 0)";
+        if ($mysqli->query($sql)) {
+            return true;
+        }
+
+        // 1062 = duplicate entry for key (race condition with MAX(id)+1); retry
+        if ($mysqli->errno == 1062) {
+            $attempts++;
+            continue;
+        }
+
+        // Any other error: stop trying
+        break;
+    }
+    return false;
+}
 if(isset($_POST['payment'])){
             $amnt=$_POST['totamnt'];
              $gamnt=$_POST['gamnt'];
@@ -174,30 +201,19 @@ if(isset($_POST['payment'])){
         $err = "Payment Not Complete,Please Try Again";
     }
     else{
-            $sql =$mysqli->query("select * from cart where date='$date' order by id ASC");
-                while($reply = mysqli_fetch_array($sql)){
-                        $details=$reply['details'];
-                        $amount=$reply['amount'];
-                         
-                            $inv =$mysqli->query("insert into invoice values(NULL,'$date','$teller','$customer','$details','$time','$amount','$amount','$officer')");
+            // Clear local cart tables and hand off to BPMS for actual payment processing.
+            // We no longer insert into local invoice/payment/cashbook/journal; BPMS becomes the source of truth.
+            $mysqli->query("delete from cart");
+            $mysqli->query("delete from cart_pay");
 
-                    }
+            $_SESSION['bpms_type']         = 'general';
+            $_SESSION['bpms_amount']       = $amnt;
+            $_SESSION['bpms_customer']     = $customer;
+            $_SESSION['bpms_patient_code'] = isset($_POST['code']) ? $_POST['code'] : '';
+            $_SESSION['bpms_teller']       = $teller;
 
-            $sql2 =$mysqli->query("select * from cart_pay where date='$date' order by id ASC");
-                while($replys = mysqli_fetch_array($sql2)){
-                        $bank=$replys['bank'];
-                        $account=$replys['account'];
-                        $amount=$replys['amount'];
-                        $mode=$replys['mode'];
-                         
-                                                            $sqs =$mysqli->query("insert into payment values(NULL,'$date','$teller','$customer','$bank','$mode','$amount','$officer')");
-                                                             $csh =$mysqli->query("insert into cashbook values(NULL,'$date','$teller','$time','$customer','$amount','0','0','0','$officer')");
-                                                                $jorn =$mysqli->query("insert into journal values(NULL, '$date','100','Cash Account','0','$amount','$officer')");
-                                                                $jorn2 =$mysqli->query("insert into journal values(NULL, '$date','101','Sales Account','$amount','0','$officer')");
-                    }
-                    echo "<script>location='receipt.php?inv=$teller&date=$date'</script>";
-                     $sqls =$mysqli->query("delete from cart");
-                      $sls =$mysqli->query("delete from cart_pay");
+            header('Location: clinic_bpms_start.php');
+            exit;
 
         }
     }
@@ -215,36 +231,18 @@ if(isset($_POST['pharmacy'])){
         $err = "Payment Not Complete,Please Try Again";
     }
     else{
-            $sql =$mysqli->query("select * from pharmacy_order where trackid='$tid' and date='$date' order by id ASC");
-                while($reply = mysqli_fetch_array($sql)){
-                        $customer=$reply['customer'];
-                        $amount=$reply['amount'];
-                         $drug=$reply['drug'];
-                          $qnt=$reply['Qnt'];
-                           $const=$reply['const'];
-                         
-                            $inv =$mysqli->query("insert into pharmacy_invoice values(NULL,'$date','$time','$customer','$tid','$drug','$qnt','$amount','$const','$officer')");
+            // For pharmacy orders, hand off to BPMS instead of recording local payment entries.
+            // We keep the order in 'Pending' state here; bpms-report.php will update to 'Paid' when BPMS confirms.
 
-                    }
+            $_SESSION['bpms_type']         = 'pharmacy';
+            $_SESSION['bpms_amount']       = $amntp;
+            $_SESSION['bpms_customer']     = isset($_POST['name']) ? $_POST['name'] : '';
+            $_SESSION['bpms_patient_code'] = '';
+            $_SESSION['bpms_trackid']      = $tid;
+            $_SESSION['bpms_teller']       = $tid;
 
-            $sql2 =$mysqli->query("select * from pharmacy_order where date='$date' and trackid='$tid' order by id ASC");
-                while($replys = mysqli_fetch_array($sql2)){
-                         $customer=$replys['customer'];
-                        $account=$replys['account'];
-                       
-
-                        $bankp=$_POST['bankp'];
-                        $accountp=getbankacc($mysqli,$bankp);
-                        $amntp=$_POST['amntp'];
-                        $modep=$_POST['modep'];
-                         
-                                                            $sqs =$mysqli->query("insert into payment values(NULL,'$date','$tid','$customer','$bankp','$modep','$amntp','$officer')");
-                                                             $csh =$mysqli->query("insert into cashbook values(NULL,'$date','$tid','$time','$customer','$amntp','0','0','0','$officer')");
-                                                                $jorn =$mysqli->query("insert into journal values(NULL, '$date','100','Cash Account','0','$amntp','$officer')");
-                                                                $jorn2 =$mysqli->query("insert into journal values(NULL, '$date','101','Sales Account','$amntp','0','$officer')");
-                    }
-                    echo "<script>location='phar_receipt.php?inv=$tid&date=$date'</script>";
-                     $sqls =$mysqli->query("update pharmacy_order set status='Paid' where trackid='$tid'");
+            header('Location: clinic_bpms_start.php');
+            exit;
 
         }
     }

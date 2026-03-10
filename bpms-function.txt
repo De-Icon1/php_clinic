@@ -1,0 +1,839 @@
+<?php
+session_start();
+$merchant_ida = '00019'; //OLD MERCHANT CODE
+//$merchant_id = '300029';
+
+$public_key = '1d8c210a3b1a5d32496204618cf5bd5a';
+$currency = 'NGN';
+$hash_type = 'SHA256';
+
+$privateKey = "fbf1f5bbf7d4bfcaead84b46022286e4";
+//staging.xpresspayonline.com/xp-gateway/v2
+//payxpress
+$public_keyToken = "XPPUBK-210e5d8f1c72c5de3bde5c5b7a817754-X";
+date_default_timezone_set('Africa/Lagos');
+$regdate = date('Y-m-d H:i:s');
+$gateway = 3;
+if ($gateway == 1) {
+    $paymentGateway = "https://xpresspayonline.com/xp-gateway/v2";
+    //	 $queryPaymentGateway = "https://xpresspayonline.com/xp-gateway/ws/v2/query";
+    $queryPaymentGateway = "https://xpresspayonline.com/xp-gateway/ws/v2/query";
+
+} elseif ($gateway == 2) {
+    $paymentGateway = "https://xpresspayonline.com:8000/xp-gateway/v2";
+    $queryPaymentGateway = "https://xpresspayonline.com:8000/xp-gateway/ws/v2/query";
+    //
+
+} elseif ($gateway == 3) {
+    $queryPaymentGateway = $paymentGateway = 'https://ticrms.edutams.net/checkout/entry';
+    $merchant_id = 300029;
+    $public_keyToken = 'PUB_KEY_WMZEYBRU1O1KRESPOPOOUYCDI4FTCUKJ' ;
+    $public_key = 'PUB_KEY_WMZEYBRU1O1KRESPOPOOUYCDI4FTCUKJ';
+    $privateKey = 'PRI_KEY_WMWERTYU7I900OOUHOKHDGDHDT32AGSHHJ';
+    $queryPaymentGateway = "https://ticrms.edutams.net/checkout/re-query";
+
+} else {
+    'NA';
+}
+
+
+include('../mail/mailer.php');
+
+//getOldRecord("INV21576583874", '300029',  $public_keyToken);
+
+function getOldRecord($transactionId, $merchantId, $token)
+{
+
+
+    $authorization = "Authorization: Bearer ".$token;
+    //$authorization = "Authorization: Bearer ".$token;
+    //	echo 'token is '.$token;
+
+    $curl = curl_init();
+    $data = json_encode(array("transactionId" => $transactionId,"merchantId" => $merchantId));
+    //print_r(json_decode($data));
+    curl_setopt_array($curl, array(
+        CURLOPT_HTTPHEADER => array('Content-Type: application/json' , $authorization),
+      CURLOPT_URL => 'https://xpresspayonline.com:9898/api/GetPayment',
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_ENCODING => '',
+      CURLOPT_MAXREDIRS => 10,
+      CURLOPT_TIMEOUT => 0,
+      CURLOPT_FOLLOWLOCATION => true,
+      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+      CURLOPT_CUSTOMREQUEST => 'POST',
+      CURLOPT_POSTFIELDS => $data,
+
+      //CURLOPT_POSTFIELDS => json_encode(array('transactionId' => $matric,'merchantId' => $session)),
+    ));
+
+    $response = curl_exec($curl);
+
+
+    //print_r($response);
+
+    curl_close($curl);
+    return  json_decode($response, true);
+
+}
+
+
+function queryPOSTransactions($transactionId, $prn, $token)
+{
+
+
+    $authorization = "Authorization: Bearer ".$token;
+    //$authorization = "Authorization: Bearer ".$token;
+    //	echo 'token is '.$token;
+
+    $curl = curl_init();
+    $data = json_encode(array("transactionId" => $transactionId,"prn" => $prn));
+    //print_r(json_decode($data));
+    curl_setopt_array($curl, array(
+        CURLOPT_HTTPHEADER => array('Content-Type: application/json' , $authorization),
+      CURLOPT_URL => 'https://xpresspayonline.com:9898/api/GetPayment/pos',
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_ENCODING => '',
+      CURLOPT_MAXREDIRS => 10,
+      CURLOPT_TIMEOUT => 0,
+      CURLOPT_FOLLOWLOCATION => true,
+      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+      CURLOPT_CUSTOMREQUEST => 'POST',
+      CURLOPT_POSTFIELDS => $data,
+
+      //CURLOPT_POSTFIELDS => json_encode(array('transactionId' => $matric,'merchantId' => $session)),
+    ));
+
+    $response = curl_exec($curl);
+
+
+    //print_r($response);
+
+    curl_close($curl);
+    return  json_decode($response, true);
+
+}
+
+function generateBPMSTransId($portalcode)
+{
+    //echo 'about to geenrate';
+    include('bpms-dbconnect.php');
+    //10 - PUTME PORTAL
+    //11 - UG PORTAL ADMISSION AND RETURNING
+    //12 - CCED ADMISSION AND RETURNING
+    //13 - CCED APPLICATION
+    //14 - PGS APPLICATION
+    //15 - PGS ADMISSION AND RETURNING
+    //16 - TRANSCRIPT PORTAL
+    //17-MEDICCAL
+
+
+
+    $tid = 'BP'.$portalcode.mt_rand(0, 9).time();
+    $trans_search = $bpms->query("SELECT * FROM transactions WHERE transid = '$tid'");
+
+    if (!$trans_search) {
+        die($bpms->errorInfo().' GEN_CHK_ER');
+    }
+    //echo 'AFTER QUERY';
+    if ($trans_search->rowCount() > 0) {
+        $tid = generateBPMSTransId($portalcode);
+    }
+    //echo $trans_search->rowCount()
+    //echo ' AFTER COUNT';
+    //search expresstransactionstable for the id.
+    //if num of rows of tid == 0 ... ie. not previously existing make use of it, else
+    //$tid = generate_transid($portalcode);
+    //return $tid;
+    return $tid;
+}
+
+function preBPMSPurchaseLogger($regnum, $sname, $fname, $mname, $level, $prog, $session, $portal, $product_id, $referrer_url, $callback_url, $product_desc, $amount, $currency, $email, $merchant_id, $hash_type, $public_key, $privateKey, $transid, $tel, $paymentType, $paymentGateway)
+{
+
+    include('bpms-dbconnect.php');
+    if (empty($product_id)) {
+        ?>
+		<script language="javascript">
+alert("INVALID REV ID <?php echo $product_id?>");
+</script>
+		<?php exit;
+    }
+
+    if (isset($_SESSION['unam']) && ($_SESSION['unam'] == 'BANJOTOBI')) {
+        //echo $paymentGateway.'_df';
+        //exit;
+    }
+    if (empty($email)) {
+        die($email.' email is invalid');
+        $email = 'non@non.com';
+    }
+
+    if (strlen($tel) < 11) {
+        die($tel.' tel is invalid');
+    }
+    $paydetails = 'FAILED';
+    //echo $paydetails;
+    //amount=5000&callback-url=https://etranscript.oouagoiwoye.edu.ng/xpayment-report.php&currency=NGN&customer-email=banjotobi@gmail.com&merchant-id=00019&product-desc=13&product-id=200050062112021001&public-key=1d8c210a3b1a5d32496204618cf5bd5a&trans-id=1081539960582
+    //$hashString =  "amount=".$amount."&callback-url=".$callback_url."&currency=".$currency."&customer-email=".$email."&merchant-id=".$merchant_id."&product-desc=".$product_desc."&product-id=".$product_id."&public-key=".$public_key."&trans-id=".$transid;
+    // start underground query check
+    $ptranQ = $bpms->query("SELECT * FROM transactions WHERE regnum = '$regnum' and product_id = '$product_id' and cron = 0 order by created_at desc limit 1");
+    if (!$ptranQ) {
+        die($bpms->errorInfo().' PREV_CHK_FAILED');
+    }
+    if ($ptranQ->rowCount() > 0) {
+        $prev = $ptranQ->fetch(PDO::FETCH_ASSOC);
+        if(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+            $url = "https://";
+        } else {
+            $url = "http://";
+        }
+        // Append the host(domain name, ip) to the URL.
+        $url .= $_SERVER['HTTP_HOST'];
+
+        // Append the requested resource location to the URL
+        $url .= $_SERVER['REQUEST_URI'];
+
+        //echo $url;
+        //checkBPMSPayment($prev['transid'], $merchant_id, $public_key, $queryPaymentGateway);
+        ?>
+<script language="javascript">
+alert("A related transaction #<?php echo $prev['transid'].' initiated '.$prev['created_at'];?>\nChecking its status to avoid dupliated payment\nThanks");
+	document.location = "<?php echo 'https://portal.oouagoiwoye.edu.ng/manage/bpms-report.php?request_id='.$prev['transid'].'&mode=track&url='.$url?>";
+</script>
+<?php
+        exit;
+    }
+
+    //end of underground query check
+    //echo 'af';
+    //echo 'AFTER QUERY';
+    if (!$trans_search) {
+        //die($bpms->errorInfo().' CHK_VAL_FAILD');
+    }
+
+
+
+    $hash_string = "request_id={$transid}"
+    . "&callback_url={$callback_url}"
+    . "&customer_email={$email}"
+    . "&customer_phone={$tel}"
+    . "&customer_first_name={$fname}"
+    . "&customer_first_name={$sname}"
+    . "&public-key={$public_key}";
+    $hashString = $hash_string;
+
+    if (isset($_SESSION['unam'])) {
+        //echo $hashString;
+        //exit;
+    }
+    if (empty($tel)) {
+        $tel = '08012345678';
+    }
+    //echo $privateKey;
+    $secret = hex2bin($privateKey);
+    //$hash = hash_hmac($hash_type, $hashString,$secret);
+    $hash = hash_hmac($hash_type, $hash_string, $privateKey);
+    //amount=20000&email=kazeem.uche@gmail.com&merchantid=10000002&narration=Acceptance fee&transactionid=100000021&hashtype=SHA256
+    /*$prnMerchantId = 'SB10555867OGR10';;
+    //$prnMerchantId = '1000008';;
+    $PrnHashString = 'amount='.$amount.'&email='.$email.'&merchantid='.$prnMerchantId.'&narration='.$product_desc.'&transactionid='.$transid.'&hashtype=SHA256';
+    $pHash = hash('SHA256', $PrnHashString);;
+    //API URL
+$url = 'https://bi.xpressreport.com:1005/api/Payment/GeneratePRN';
+
+//create a new cURL resource
+//$ch = curl_init($url);
+
+//setup request to send json via POST
+$data = array(
+    'Name' => $sname.' '.$fname,
+    'Email' => $email,
+    'PhoneNo' => $tel,
+    'Amount' => $amount,
+    'Narration' => $product_desc,
+    'PaymentType' => $paymentType,
+    'TransactionId' => $transid,
+    'HashString' => $pHash,
+    'HashType' => 'SHA256',
+    'MerchantId' => $prnMerchantId,
+    'UniqueReferenceNo' => $regnum,
+    'RevenueCode' => $product_id,
+    'ValidityPeriod' => '1',
+);
+$payload = json_encode($data);
+//print_r($payload);
+//attach encoded JSON string to the POST fields
+$ch = curl_init( $url );
+# Setup request to send json via POST.
+//$payload = json_encode( array( "customer"=> $data ) );
+curl_setopt( $ch, CURLOPT_POSTFIELDS, $payload );
+curl_setopt( $ch, CURLOPT_HTTPHEADER, array('Content-Type:application/json'));
+# Return response instead of printing.
+curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+# Send request.
+$result = curl_exec($ch);
+curl_close($ch);
+    if (isset($_SESSION['ccad']))
+    {
+        //print_r($result);
+    }
+    //print_r($result);
+    $repot = json_decode($result, true);
+    $prn = $repot['PRN'];
+
+    //echo 'PRN: '.$prn;;
+
+# Print response.
+//echo "<pre>$result</pre>";
+
+    //echo 'PRS END ';
+    //exit;
+    //echo 'hash is '.$privateKey.' type '.$hash_type.' '.$server."<br>insert INTO transactions (regnum, sname, fname, mname, level, prog,  session, email, portal, currency, amount_due, referrer_url, callback_url, customer_email, hash, hash_type, product_desc, merchant_id, product_id, transid) VALUES ('$regnum', '$sname', '$fname', '$mname', '$level', '$prog', '$session', '$email', '$portal', '$currency', '$amount', '$referrer_url', '$callback_url', '$email', '$hash', '$hash_type', '$product_desc', '$merchant_id', '$product_id', '$transid')";
+    //echo 'tb<br>';
+    include('bpms-dbconnect.php');
+
+    //	echo 'td<br>';
+//echo 'before';
+
+*/
+
+    $exp_date = gmdate("Y-m-d").' 23:59';
+    //echo 'hi';
+    $si = "insert INTO transactions (regnum, sname, fname, mname, level, prog,  session, email, portal, currency, amount_due, gateway, referrer_url, callback_url, customer_email, hash, hash_type, product_desc, merchant_id, product_id, transid, status_desc, trans_exp_date) VALUES ('$regnum', '$sname', '$fname', '$mname', '$level', '$prog', '$session',  '$email', '$portal', '$currency', '$amount', '$paymentGateway', '$referrer_url', '$callback_url', '$email', '$hash', '$hash_type', '$product_desc', '$merchant_id', '$product_id', '$transid', 'PENDING', '$exp_date') ON DUPLICATE KEY UPDATE amount_due = '$amount'";
+    //echo $si;
+
+    try {
+        //$logi = $bpms->query(" insert  transaction_logs  (transid, url, log) values ('$orderid', '$referrer_url', '$storeResponse')"); // transaction_logs
+        $save_trans = $bpms->query($si);
+    } catch (PDOException $exception) {
+        $error = $exception->getMessage() ;
+        die($error.' UP_LOG_FAILD');
+    }
+
+    //echo 'after';
+
+    //	echo 'savved';
+    $payq = $bpms->query("select * from transactions where regnum = '$regnum' and transid = '$transid'");
+    if (!$payq) {
+        //echo 'sjd';
+        redirect('404', $bpms->errorInfo().' INS_VAL_FAILD');
+    }
+    $paydetails = $payq->fetch(PDO::FETCH_ASSOC);
+    //print_r($paydetails);
+    //}
+    return $paydetails;
+}
+
+function postBPMSPaymentLogger($data)
+{
+
+    include('bpms-dbconnect.php');
+    global $merchant_ida;
+    global $merchant_id;
+    $merch_glob = $merchantid;
+    //echo 'about to process post ';
+    $paydetails = 'INVALID';
+
+    if (isset($_SESSION['ugadmin'])) {
+        //	echo 'ins'.$merchant_id;
+
+    }
+    print_r($data);
+
+
+    if((strlen($data['request_id']) > 5)) {
+        $transid = mysql_real_escape_string(trim($data['request_id']));
+        //$status_code = mysql_real_escape_string(trim($data['status-code']));
+        //$status_desc = mysql_real_escape_string(trim($data['status-msg']));
+        //$merchantid = mysql_real_escape_string(trim($data['merchant-id']));
+        // and (merchant_id = '$merchantid' or merchant_id = '$merchant_ida' or  merchant_id = '$merchant_id')
+        $trans_search = $bpms->query("SELECT * FROM transactions WHERE transid = '$transid'");
+        //echo 'AFTER QUERY';
+        if (!$trans_search) {
+            die($bpms->errorInfo().' CHK_VAL_FAILD');
+        }
+        //echo 'lsd';
+        if ($trans_search->rowCount() == 1) {
+            //		echo 'rec_fnd';
+            $trans = $trans_search->fetch(PDO::FETCH_ASSOC);
+        } else {
+            die('No payment record found for payment with trans '.$transid); //.' MECHANT '.$merchantid;
+
+
+        }
+        if (isset($trans)) {
+            $statuscode = mysql_real_escape_string(trim($data['status-code']));
+            $status_msg = mysql_real_escape_string(trim($data['status-msg']));
+            //echo "UPDATE transactions set status_code = '$statuscode' and status_desc = '$status_msg' where transid = '$transid'";
+            $trans_update = $bpms->query("UPDATE transactions set status_code = '$statuscode', status_desc = '$status_msg' where transid = '$transid'");
+            if (!$trans_update) {
+                die($bpms->errorInfo().' UP_VAL_FAILD');
+            }
+            $payq = $bpms->query("select * from transactions where transid = '$transid'");
+            if (!$payq) {
+                die($bpms->errorInfo().' INS_VAL_FAILD');
+            }
+            $paydetails = $payq->fetch(PDO::FETCH_ASSOC);
+        }
+    } else {
+        $paydetails = 'INVALID';
+    }
+    //echo 'details is ';
+    //print_r($paydetails);
+    return $paydetails;
+}
+
+function url_encode($string)
+{
+    return urlencode(utf8_encode($string));
+}
+
+function url_decode($string)
+{
+    return utf8_decode(urldecode($string));
+}
+
+
+function checkBPMSPayment($transid, $merchant_id, $public_key, $queryPaymentGateway)
+{
+
+
+    include('bpms-dbconnect.php');
+    $trans_search = $bpms->query("SELECT * FROM transactions WHERE transid = '$transid'");
+    //echo 'AFTER QUERY';
+    if (!$trans_search) {
+        die($bpms->errorInfo().' CHK_VAL_RPT_FAILD');
+    }
+    //echo 'tb_ij';
+
+    if ($trans_search->rowCount() < 1) {
+        die($transid. " IS NOT FOUND IN OUR RECORDS");
+    }
+    $ptrans = $trans_search->fetch(PDO::FETCH_ASSOC);
+
+    if ($ptrans['status_desc'] != 'APPROVED') {
+        //echo '<br>inside';
+        $post_data = [
+            'public_key' => $public_key,
+            'school_code' => $merchant_id, //Merchant id
+            'request_id' => $transid,
+        ];
+
+        $data_string = json_encode($post_data);
+        //print_r($post_data);
+
+        $ch = curl_init($queryPaymentGateway);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt(
+            $ch,
+            CURLOPT_HTTPHEADER,
+            array(
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($data_string))
+        );
+        $result = curl_exec($ch);
+        if (curl_error($ch)) {
+            $error_msg = curl_error($ch);
+            echo 'RQE';
+            var_dump($error_msg);
+            ///die();
+
+        }
+
+        $transaction_response = json_decode($result, true);
+        $response = $transaction_response;
+
+        //echo '<br><br>CHIECK CHECK<br>';
+        //print_r($response);
+
+        if (isset($_SESSION['unam'])) {
+            echo '<h3>RAW GATEWWAY RESPONSE</H3>';
+            print_r($response);
+            echo '<br>';
+        }
+
+        if (count($response) < 5) {
+            ?>
+        <script language="javascript">
+            console.log("FAILED!\nGATEWAY RESPONSE: <?php echo $response['message']; ?>");
+        ///alert("FAILED!\nGATEWAY RESPONSE: <?php echo $response['message']; ?>");
+            //document.location = document.referrer;
+        </script>
+        <?php //exit;
+            //echo $status = 'YET TO GET TO PAYMENT GATEWAY';
+            //echo $msg = $response['message'];
+        }
+        //echo 'tbis';
+        if (isset($response['request_id'])) {
+            $upRec = 1;
+            $resTransId = $response['request_id'];
+            $orderid = $resTransId;
+            $bpmsTransId = $response['payment_code'];
+            $bpmsUrl = url_encode($response['payment_url']);
+            $resAmount = $response['raw_response']['data']['amount_paid'];
+            $amount = $resAmount;
+            $resResponseCode = $response['raw_response']['status_code'];
+            $resResponseMsg = htmlentities($response['status'], ENT_QUOTES);
+
+            //print_r($response['raw_response']);
+            $resTransDate = $response['updated_at'];
+
+
+            $storeResponse = json_encode($response);
+            $referrer_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
+            try {
+
+                $raw = htmlentities($storeResponse, ENT_QUOTES);
+                $logi = $bpms->query(" insert  transaction_logs  (transid, url, log) values ('$orderid', '$referrer_url', '$raw')"); // transaction_logs
+            } catch (PDOException $exception) {
+                $error = $exception->getMessage() ;
+                die($error.' UP_LOGer_FAILD2');
+            }
+            if ($upRec == 1) {
+
+                try {
+                    $raw = htmlentities($storeResponse, ENT_QUOTES);
+
+                    $trans_update = $bpms->query("UPDATE transactions set status_code = '$resResponseCode', status_desc = '{$resResponseMsg}', trans_date = '$resTransDate', bpmsUrl = '$bpmsUrl', bpmsTransId = '$bpmsTransId',  amount_paid = '$resAmount', response = '$raw' where transid = '$resTransId'");
+                } catch (PDOException $exception) {
+
+                    $error = $exception->getMessage() ;
+                    die($error.' UP_VAL_FAILD');
+                    //exit;
+                }
+
+
+                $li = "SELECT * FROM transactions WHERE transid = '$resTransId'";
+                //echo $li;
+                $trans_search = $bpms->query($li);
+
+
+                //echo 'AFTER QUERY'.$trans_search->rowCount();
+                if (!$trans_search) {
+                    die($bpms->errorInfo().' CHK_VAL_RPT_FAILD');
+                }
+
+                if ($trans_search->rowCount() < 1) {
+                    //echo 'not found';
+                    //exit;
+                    die('No payment record found for payment with trans '.$resTransId);
+
+                } elseif ($trans_search->rowCount() == 1) {
+
+                    $ptrans = $trans_search->fetch(PDO::FETCH_ASSOC);
+                    $prow = $paydetails = $ptrans;
+
+                }
+            }
+
+
+
+            include('bpms-dbconnect.php');
+
+        } else {
+            //echo 'ptrans';
+            //print_r($ptrans);
+            $prow = $paydetails =  $ptrans;
+        }
+
+
+
+
+    } else {
+        //echo 'here ';
+        $prow = $paydetails =  $ptrans;
+
+    }
+    //echo 'tb<br>'.$prow['cron'];
+    if ($prow['cron'] == 0) {
+
+        try {
+            $q = $bpms->query("UPDATE transactions set cron = 1 WHERE transid = '{$prow['transid']}' ");
+            ///
+        } catch(PDOException $e) {
+            echo "<strong>Query failed:</strong><br>" . $e->getMessage();
+        }
+    }
+
+
+    //print_r($response);
+    //echo '<br><br>';
+
+
+
+    /* CHECK CHECK RWAW PREV
+    $resTransId = $response['request_id'];
+        $orderid =$resTransId;
+         $bpmsTransId = $response['payment_code'];
+        $bpmsUrl = url_encode($response['payment_url']);
+        $resAmount = $response['raw_response']['data']['amount_paid'];
+        $amount = $resAmount;
+        $resResponseCode = $response['raw_response']['status_code'];
+        $resResponseMsg = htmlentities($response['status'], ENT_QUOTES);
+
+
+    */
+    $amount = $paydetails['amount_paid'];
+    $regnum = $paydetails['regnum'];
+    $purposePf = explode("|", $paydetails['product_desc']);
+    $purpose = end($purposePf);
+    $transdt = !empty($paydetails['trans_date']) ? $paydetails['trans_date'] : $paydetails['updated_at'];
+    //PG/18/0696
+    $session =  $paydetails['session'];
+    $level = $paydetails['level'];
+    $response = $paydetails;
+    //$prow = $response;
+
+
+    //exit;
+
+
+    if (isset($_SESSION['pgad'])) {
+        // echo 'UPDATE RESPONSE IS '.$response.'<br>';
+    }
+
+    ////PROCESSSING LIKE UNIFIED
+
+
+    $orderid = $prow['transid'];
+    $prow['revcode'] = trim($prow['product_id']);
+    //echo ''.$prow['status_desc'];
+    //echo $prow['revcode'];
+    //FIX AKANJI ERROR
+    if ($prow['revcode'] == '200050062112013021') {
+        //echo 'tbi';
+        // $prow['revcode'] = '200050062112013021';
+    }
+    if (isset($_SESSION['unam'])) {//echo 'revcode '.$prow['revcode'];
+        //exit;
+    }
+    $revcode = $prow['revcode'];
+    //new codes 200050062112016001 = 400; 200050062112016003=500; 200050062112016002=200; 200050062112016004=300; 200050062112016005=600
+    //$ug_portal = array("200050062112016001", "200050062112016003", "200050062112016006", "200050062112016007");
+    $ug_portal = array("200050062112016001", "200050062112016003", "200050062112016006", "200050062112016007","200050062112016002","200050062112016004","200050062112016005");
+
+    if (in_array($prow['revcode'], $ug_portal)) {
+        $prow['revcode'] = '200050062112016001';
+    }
+
+    if ($prow['status_code'] == '00') {
+        $prow['status_code'] = '000';
+    }
+    $ugportal = array("200050062112013032", "200050062112009001", "HLD015", "HLD016");
+
+    //$ug_portal = array("200050062112013053", "200050062112001001", "200050062112016001", "HLD002", "HLD003", "HLE001", "HLE002", "HLE003", "HLD004", "HLD005", "HLD006", "HLD007", "HLD008", "HLD009", "HLD010", "HLD011", "HLD012", "HLD013", "200050062112016007", "HLD013", "200050062112007001", "HLD015", "HLD016", "200050062112013021", "200050062112013051");
+    $ug_portal = array("200050062112013053", "200050062112001001", "200050062112016001", "HLD002", "HLD003", "HLE001", "HLE002", "HLE003", "HLD004", "HLD005", "HLD006", "HLD007", "HLD008", "HLD009", "HLD010", "HLD011", "HLD012", "HLD013", "200050062112016007", "HLD013", "200050062112007001", "HLD015", "HLD016", "200050062112013021", "200050062112013051","200050062112016002","200050062112016004","200050062112016005","200050062112016003", "200050062112016006");
+
+    //	echo 'tobi';
+    $cced = array("200050062112016010", "200050062112001003", "200050062112003001", "200050062112003003", "200050062112001003", "HLJ008", "200050062112001004");
+    $ccedAcceptance = array("200050062112001003", "200050062112001003", "200050062112001004");
+    //echo 'status is '. $prow['status_desc'];
+    //echo '<br>';
+    //echo 'rvc is '.$revcode;
+    $pgsD = array("200050062112016009", "200050062112001002", "200050062112003002");
+    $pgsBS = array("200050062112001005","200050062112003005","200050062112016012");
+    $pgsOSK = array("200050062112003006","200050062112001006","200050062112016013");
+
+    if(in_array($revcode, $ug_portal) || in_array($revcode, $ugportal)) {
+        include('../portal/students/dbconfig.php');
+        //echo '<br/>	UG DB SELECTED<br/>				';
+    } elseif (in_array($revcode, $cced)) {
+        include('cced_dbconfig.php');
+        //echo '<br/>	CCED DB SELECTED<br/>				';
+
+    } elseif (in_array($revcode, $pgsD)) {
+        //include('../pgs/portal/main.php');
+        include('https://pgs.oouagoiwoye.edu.ng/portal/main.php');
+        //echo '<br/>	PGS DB SELECTED<br/>				';
+    } elseif(in_array($revcode, $pgsBS)) {
+        include('https://ooubs.oouagoiwoye.edu.ng/portal/main.php');
+    } elseif(in_array($revcode, $pgsOSK)) {
+        include('https://portal.oskaigs.oouagoiwoye.edu.ng/main.php');
+
+
+    } else {
+        //echo 'UNBLE TO DETERMINE THE DATABASE FOR '.$revcode;
+        //break;
+    }
+
+    if ($prow['portal'] == 'CCED') {
+        include('cced_dbconfig.php');
+
+    }
+    //process business school APPLICATION
+    if (($prow['status_desc'] == 'APPROVED') && ($prow['revcode'] == '200050062112003005')) {
+        $localhost = "162.214.76.46";
+        $user = "admin_bs";
+        $password = "B4k^7ov41";
+        $dbi = "admin_bs";
+        $dbcon = mysqli_connect("$localhost", "$user", "$password", "$dbi");
+        /*mysqli_connect("$localhost", "$user", "$password");
+        mysql_select_db("$dbi") or die("cannot connect");*/
+
+        //		echo 'BEFORE INCLUDING PGS FUNCTIONS<br>';
+        //C:\laragon\www\business_school\portal\my-functions.php
+        include('https://ooubs.oouagoiwoye.edu.ng/portal/my-functions.php');
+
+        //echo 'AFTER FUNCTIONS BEFORE PROCESSING<br>';
+        // process_pgs_application_payment($prow['regnum'], $prow['orderid'], $prow['purpose'], $prow['amnt'], $prow['trans_date']);
+
+        if (isset($_SESSION['pgad'])) {
+            echo 'ABOUT PROCESS APPLICATION BASED ON PAYMENT  '.$orderid.'<br>';
+        }
+
+        process_bs_application_payment_pay($prow['regnum'], $orderid, $purpose, $amount, $prow['trans_date']);
+
+        if (isset($_SESSION['pgad'])) {
+            echo 'APPLICATION PROCESSED SUCCESSFULLY<br>';
+        }
+        //	 echo 'AFTER PROCESSING<br>';
+    } else {
+
+
+        //END OF AUTO PROCESSING LIKE BPMS
+
+
+        return $response;
+    }
+}
+
+
+
+
+
+function process_bs_application_payment_pay($tel, $trans_id, $trans_type, $amount, $trans_date)
+{
+
+    include('https://ooubs.oouagoiwoye.edu.ng/portal/main.php');
+    if (empty($trans_id)) {
+
+        if (isset($_SESSION['pgad'])) {
+            echo 'TRANSACTION ID IS BLANK<br>';
+            echo 'SELECTED'. $tel.'$trans_id '.$trans_id.'<br>';
+            //exit;
+        }
+        echo 'error';
+        exit;
+
+    }
+    if (isset($_SESSION['pgad'])) {
+        echo 'before mailer inclusion<br>';
+        echo 'SELECTED'. $tel.'$trans_id '.$trans_id.'<br>';
+        //exit;
+    }
+
+    include('../mail/mailer.php');
+    //echo "i get here";
+    //exit();
+    $q = mysqli_query($dbcon, "select * from register where tel = '$tel'") or die(mysqli_connect_error());
+    if (mysqli_num_rows($q) > 0) {
+        $reg = mysqli_fetch_array($q);
+        // var_dump($reg);
+        //exit();
+        $transchkq = mysqli_query($dbcon, "select * from ap_payment where trans_id = '$trans_id'") or die(mysqli_connect_error($transchkq));
+        $transchek = mysqli_num_rows($transchkq);
+        if (empty($card_id) && ($transchek < 1)) {
+
+            $ses = explode("/", $reg['session']);
+            if ($reg['session'] == '2020/2021') {
+                $session = '20';
+            } else {
+                $session = str_replace("20", "", $ses[0]);
+            }
+
+            $regi = 'BS/'.$session;
+            ///obtain last id
+            $q = mysqli_query($dbcon, "select * from ap_payment where regnum like '$regi%'") or die(mysqli_connect_error().' AP_CHK_ER_1');
+            $c_num_recs = mysqli_num_rows($q);
+            echo 'NUMBER IS '.$c_num_recs;
+            $id = $c_num_recs + 1;
+
+            if ($id < 10) {
+                $fnum = $regi.'/000'.$id;
+            } elseif ($id < 100) {
+                $fnum = $regi.'/00'.$id;
+            } elseif ($id < 1000) {
+                $fnum = $regi.'/0'.$id;
+            } else {
+                $fnum = $regi.'/'.$id;
+            }
+            echo 'new reg number '.$fnum.'<br>';
+
+            if (isset($_SESSION['pgad'])) {
+                echo "select * from ap_payment where regnum = '$fnum'<br>";
+            }
+            $query = mysqli_query($dbcon, "select * from ap_payment where regnum = '$fnum'") or die(mysqli_connect_error().'fnum_check');
+            if ((mysqli_num_rows($query) < 1) && (!empty($fnum))) {
+                if (isset($_SESSION['pgad'])) {
+                    echo "insert into ap_payment (trans_id, trans_type, regnum, tel, email, trans_date, status) VALUES ('$trans_id', '$trans_type', '$fnum', '$tel', '{$reg['mail']}', '$trans_date', '1')<br>";
+                }
+                $transchkq = mysqli_query($dbcon, "select * from ap_payment where tel = '$tel'") or die(mysqli_connect_error($transchkq));
+                ;
+                $transchek = mysqli_num_rows($transchkq);
+                echo 'number of rows is ';
+                if ($transchek < 1) {
+
+                    mysqli_query($dbcon, "insert into ap_payment (trans_id, trans_type, regnum, tel, email, trans_date, status) VALUES ('$trans_id', '$trans_type', '$fnum', '$tel', '{$reg['mail']}', '$trans_date', '1')") or die(mysqli_connect_error().'fnum_insert');
+                } else {
+                    $trans_id.' HAS BEEN PREVIOUSLY PROCESSED<br>';
+                }
+                mysqli_query($dbcon, "insert into applications (regnum, form_num, sname, fname, mname, mode, cid,adm_year) VALUES ('$fnum', '$fnum', '{$reg['sname']}', '{$reg['fname']}', '{$reg['mname']}', '{$reg['mode']}', '{$reg['cid']}', '{$reg['session']}')") or die(mysqli_connect_error().' APT_IN_ER_');
+                mysqli_query($dbcon, "insert into biodata (regnum, sname, fname, mname, tel, email) VALUES ('$fnum', '{$reg['sname']}', '{$reg['fname']}', '{$reg['mname']}','$tel', '{$reg['mail']}')") or die(mysqli_connect_error());
+                mysqli_query($dbcon, "insert into education (regnum) values('$fnum')") or die(mysqli_connect_error());
+
+                mysqli_query($dbcon, "insert into qualification (regnum) values ('$fnum')") or die(mysqli_connect_error());
+                mysqli_query($dbcon, "insert into otherdetails (regnum) values('$fnum')");
+                $pass = $reg['sname'];
+                mysqli_query($dbcon, "insert into ap_login (regnum, sname, stat) VALUES ('$fnum', '$pass', '0')") or die(mysqli_connect_error());
+
+                //send a mail to the candidate informing the candidate of the success of the whole process
+
+                $msg = '<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">Dear '.$row['fname'].',</span></p>
+				<p>&nbsp;</p>
+				<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">You have successsfully paid for the Olabisi Onabanjo University&nbsp;session</span><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">&nbsp;Postgraduate Application Form</span><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">. </span></p>
+				<p>&nbsp;</p>
+				<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">Details are:</span></p>
+				<p>&nbsp;</p>
+				<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">FORM NUMBER: '.$fnum.'<br /></span></p>
+				<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">TRANSACTION ID: '.$trans_id.'</span></p>
+				<p>&nbsp;</p>
+				<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">To continue your registration visit <a href="https://ooubs.oouagoiwoye.edu.ng/portal/application/apply.php">http://ooubs.oouagoiwoye.edu.ng/portal/application/apply.php </a>and provide the following details:</span></p>
+				<p>&nbsp;</p>
+				<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">FORM NUMBER:&nbsp;'.$fnum.'</span></p>
+				<p><span style="font-family: trebuchet ms, geneva, sans-serif;"><span style="font-size: 18.6667px;">DEFAULT PASSWORD:&nbsp;'.$pass.'</span></span></p>
+				<p>&nbsp;</p>
+				<p>&nbsp;</p>
+				<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">Kindly visit&nbsp;<a href="https://ooubs.oouagoiwoye.edu.ng/contact-us.php">https://ooubs.oouagoiwoye.edu.ng/contact-us.php</a>&nbsp;to lodge your complaints.</span></p>
+				<p>&nbsp;</p>
+				<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;">Thank you.</span></p>
+				<p>&nbsp;</p>
+				<p><span style="font-family: trebuchet ms,geneva,sans-serif; font-size: 14pt;"><strong>OOU PORTAL</strong><br /></span></p>';
+                $name = $reg['sname'].' '.$reg['fname'];
+                $subject = 'OOU PGS: '.$reg['session'].' APPLICATION PAYMENT DETAILS';
+                sendsmptmail('BS', $reg['mail'], $name, $subject, $msg);
+                mysqli_query($dbcon, "update register set card_id = '$trans_id' where tel = '$tel'");
+
+            }
+            //insert transid to register
+            //  $query = mysqli_query($dbcon,"insert into ap_payment (trans_id, trans_type, regnum, trans_date, status) VALUES ('$trans_id', '$trans_type', '$regnum', '$trans_date', '0')");
+            //generate regnum for tel and move details from reg to application
+
+
+        } else {
+            echo 'PREVIOUSLY PAID';
+        }
+
+    } else {
+        echo 'PG_NO RECORD FOUND FOR '.$tel;
+    }
+
+    //echo 'END OF FUNCT';
+}
+
+
+
+?>
