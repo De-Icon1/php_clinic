@@ -974,17 +974,14 @@ if ($stmt) {
                                                                             echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
                                                                         }
                                                                     } elseif ($pharm_table_exists) {
+                                                                        // Pharmacy table exists but no explicit location scoping available; list all pharmacy drugs
                                                                         $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy ORDER BY name ASC");
-                                                                        $ps->execute();
-                                                                        $pres = $ps->get_result();
-                                                                        while ($reply = $pres->fetch_assoc()) {
-                                                                            echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
-                                                                        }
-                                                                    } else {
-                                                                        $sql = "SELECT * FROM drug order by id ASC";
-                                                                        $result = mysqli_query($mysqli,$sql);
-                                                                        while($reply = mysqli_fetch_array($result)){
-                                                                            echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
+                                                                        if ($ps) {
+                                                                            $ps->execute();
+                                                                            $pres = $ps->get_result();
+                                                                            while ($reply = $pres->fetch_assoc()) {
+                                                                                echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
+                                                                            }
                                                                         }
                                                                     }
                                                                 ?>
