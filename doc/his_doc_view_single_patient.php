@@ -958,7 +958,8 @@ if ($stmt) {
                                                                     $location_id_for_drugs = $campus_id;
 
                                                                     if ($pharm_table_exists && $pharm_loc_col_exists && $location_id_for_drugs) {
-                                                                        $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy WHERE pharmacy_location_id = ? ORDER BY name ASC");
+                                                                        // Prefer drugs that are actually stocked at this specific pharmacy location
+                                                                        $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy WHERE pharmacy_location_id = ? AND quantity > 0 ORDER BY name ASC");
                                                                         $ps->bind_param('i', $location_id_for_drugs);
                                                                         $ps->execute();
                                                                         $pres = $ps->get_result();
@@ -966,7 +967,8 @@ if ($stmt) {
                                                                             echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
                                                                         }
                                                                     } elseif ($pharm_table_exists && $pharm_col_exists && $location_id_for_drugs) {
-                                                                        $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy WHERE campus_id = ? ORDER BY name ASC");
+                                                                        // Campus-based model: show only drugs stocked at this campus with quantity available
+                                                                        $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy WHERE campus_id = ? AND quantity > 0 ORDER BY name ASC");
                                                                         $ps->bind_param('i', $location_id_for_drugs);
                                                                         $ps->execute();
                                                                         $pres = $ps->get_result();
@@ -974,8 +976,8 @@ if ($stmt) {
                                                                             echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
                                                                         }
                                                                     } elseif ($pharm_table_exists) {
-                                                                        // Pharmacy table exists but no explicit location scoping available; list all pharmacy drugs
-                                                                        $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy ORDER BY name ASC");
+                                                                        // Pharmacy table exists but no explicit location scoping available; list only drugs that are in stock
+                                                                        $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy WHERE quantity > 0 ORDER BY name ASC");
                                                                         if ($ps) {
                                                                             $ps->execute();
                                                                             $pres = $ps->get_result();
