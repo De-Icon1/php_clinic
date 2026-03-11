@@ -6,24 +6,6 @@
     check_login();
   $doc_id=$_SESSION['doc_id'];
   $doc_number = $_SESSION['doc_number'];
-$campusid = isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
-
-function getcampus($campusid, $mysqli){
-    if (empty($campusid)) {
-        return 'All Campuses';
-    }
-    $stmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
-    if (! $stmt) {
-        return 'Unknown Campus';
-    }
-    $stmt->bind_param('i', $campusid);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    if ($row = $res->fetch_assoc()) {
-        return $row['name'];
-    }
-    return 'Unknown Campus';
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -60,7 +42,9 @@ function getcampus($campusid, $mysqli){
                                 <div class="page-title-box">
                                     
                                     <h4 class="page-title">OOU Hospital Management Information System Dashboard</h4>
-                                    <h2><?php echo getcampus($campusid,$mysqli); ?></h2>
+                                    <?php if (!empty($_SESSION['working_location'])): ?>
+                                        <p class="text-muted mb-0">Current Working Location: <strong><?php echo htmlspecialchars($_SESSION['working_location']); ?></strong></p>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>     

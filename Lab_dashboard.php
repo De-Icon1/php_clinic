@@ -67,7 +67,10 @@
                                         <div class="col-6">
                                             <div class="avatar-lg rounded-circle bg-soft-primary border-primary border">
                                                 <i class="fab fa-accessible-icon  font-22 avatar-title text-primary"></i>
-                                            </div>
+                                                <h4 class="page-title">OOU Hospital Management System Dashboard</h4>
+                                                <?php if (!empty($_SESSION['working_location'])): ?>
+                                                    <p class="text-muted mb-0">Current Working Location: <strong><?php echo htmlspecialchars($_SESSION['working_location']); ?></strong></p>
+                                                <?php endif; ?>
                                         </div>
                                         <div class="col-6">
                                             <div class="text-right">

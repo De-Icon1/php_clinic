@@ -137,6 +137,9 @@
                                      <li>
                                         <a href="his_admin_user_reldel.php">Restriction & Delete User</a>
                                     </li>
+                                     <li>
+                                        <a href="his_admin_staff_locations.php">Assign Staff Locations</a>
+                                     </li>
                                      
                                      <li>
                                         <a href="his_admin_todays_visit.php">Admin Help & Support</a>

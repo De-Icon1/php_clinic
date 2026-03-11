@@ -4,18 +4,8 @@
   include('assets/inc/checklogins.php');
   check_login();
   authorize();
-  $aid=$_SESSION['doc_id'];
-   $doc_number = $_SESSION['doc_number'];
-    $campusid=$_SESSION['campus_id'];
-
-    function getcampus($campusid,$mysqli){
-        $sql="SELECT * FROM campus_locations where id=$campusid"; 
-       $result = mysqli_query($mysqli,$sql);
-        $num=mysqli_num_rows($result);
-        $reply = mysqli_fetch_array($result);
-        $name=$reply['name'];
-        return $name;
-    }
+    $aid=$_SESSION['doc_id'];
+     $doc_number = $_SESSION['doc_number'];
 
 
 ?>
@@ -53,7 +43,9 @@
                                 <div class="page-title-box">
                                     
                                     <h4 class="page-title">Hospital Management System Dashboard</h4>
-                                    <h2><?php echo getcampus($campusid,$mysqli); ?></h2>
+                                    <?php if (!empty($_SESSION['working_location'])): ?>
+                                        <p class="text-muted mb-0">Current Working Location: <strong><?php echo htmlspecialchars($_SESSION['working_location']); ?></strong></p>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>     

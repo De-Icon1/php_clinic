@@ -8,7 +8,6 @@
         pharmacyopeningstock($date,$mysqli);
         storeopeningstock($date,$mysqli);
 
-        $campusname=$_POST['location'];
          $doc_number = $_POST['ad_id'];
          $st='ACTIVE';
         //$doc_email = $_POST['doc_ea']
@@ -20,59 +19,50 @@
         $stmt -> bind_result($doc_number, $doc_pwd, $doc_id, $doc_dept);//bind result
         $rs=$stmt->fetch();
         $stmt->close();
-        $campid = getcampusid($campusname,$mysqli);
-        // If the user selected a valid campus at login, store the numeric id and use it as working location.
-        if (is_numeric($campid) && $campid) {
-            $_SESSION['campus_id'] = (int) $campid;
-            $_SESSION['working_location_id'] = (int) $campid;
-            // also store the human readable name if available
-            $lstmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
-            if ($lstmt) {
-                $lstmt->bind_param('i', $campid);
-                $lstmt->execute();
-                $lres = $lstmt->get_result();
-                if ($lrow = $lres->fetch_assoc()) {
-                    $_SESSION['working_location'] = $lrow['name'];
-                }
-            }
-        } else {
-            // fallback: keep campus session null
-            $_SESSION['campus_id'] = null;
-        }
-        $_SESSION['doc_id'] = $doc_id;
-        $_SESSION['doc_number'] = $doc_number;//Assign session to doc_number id
-        //$uip=$_SERVER['REMOTE_ADDR'];
-        //$ldate=date('d/m/Y h:i:s', time());
-        // Attach campus/location to session if available
-        $campus_id = null;
-        $col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='his_docs' AND COLUMN_NAME='campus_id'")->fetch_assoc()['cnt'] ?? 0;
-        if ($col_exists) {
-            $cstmt = $mysqli->prepare("SELECT campus_id FROM his_docs WHERE doc_id = ? LIMIT 1");
-            if ($cstmt) {
-                $cstmt->bind_param('i', $doc_id);
-                $cstmt->execute();
-                $cres = $cstmt->get_result();
-                if ($crow = $cres->fetch_assoc()) {
-                    $campus_id = $crow['campus_id'];
-                    if (!empty($campus_id)) {
-                        // Only set working location from his_docs when it hasn't been set by the login campus selection
-                        if (!isset($_SESSION['working_location_id']) || empty($_SESSION['working_location_id'])) {
-                            $_SESSION['working_location_id'] = (int) $campus_id;
-                            $lstmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
-                            if ($lstmt) {
-                                $lstmt->bind_param('i', $campus_id);
-                                $lstmt->execute();
-                                $lres = $lstmt->get_result();
-                                if ($lrow = $lres->fetch_assoc()) {
-                                    $_SESSION['working_location'] = $lrow['name'];
-                                }
-                            }
-                        }
+
+        // Only proceed with session setup if login succeeded
+        if ($rs) {
+            $_SESSION['doc_id'] = $doc_id;
+            $_SESSION['doc_number'] = $doc_number;//Assign session to doc_number id
+            $_SESSION['doc_dept']   = $doc_dept;   // Store department for authorization / assignment rules
+
+            // 1) Prefer centrally assigned staff_locations (admin/HOD controlled)
+            $hasStaffLocation = false;
+            $now = date('Y-m-d H:i:s');
+            $sl = $mysqli->prepare("SELECT sl.location_id, cl.name FROM staff_locations sl LEFT JOIN campus_locations cl ON cl.id = sl.location_id WHERE sl.staff_id = ? AND sl.is_active = 1 AND sl.active_from <= ? AND (sl.active_to IS NULL OR sl.active_to >= ?) ORDER BY sl.active_from DESC LIMIT 1");
+            if ($sl) {
+                $sl->bind_param('iss', $doc_id, $now, $now);
+                $sl->execute();
+                $slres = $sl->get_result();
+                if ($slrow = $slres->fetch_assoc()) {
+                    $locId = (int)$slrow['location_id'];
+                    if ($locId > 0) {
+                        $_SESSION['campus_id'] = $locId;
+                        $_SESSION['working_location_id'] = $locId;
+                        $_SESSION['working_location'] = $slrow['name'] ?? '';
+                        $hasStaffLocation = true;
                     }
                 }
+                $sl->close();
+            }
+
+            // 2) If no active staff_locations assignment, do NOT guess a location from login;
+            // instead, leave location unset so admin/HOD must assign it.
+            if (!$hasStaffLocation) {
+                $_SESSION['campus_id'] = null;
+                $_SESSION['working_location_id'] = null;
+                $_SESSION['working_location'] = '';
             }
         }
-        if($rs)
+        //$uip=$_SERVER['REMOTE_ADDR'];
+        //$ldate=date('d/m/Y h:i:s', time());
+        // If login succeeded but no working location is assigned, block access for non-admin users
+        // until an admin/HOD assigns one via staff_locations. Administrators are allowed to log in
+        // without a working location so they can manage assignments.
+        if ($rs && (empty($_SESSION['working_location_id']) || !is_numeric($_SESSION['working_location_id'])) && $doc_dept != 'Administrator') {
+            $err = "No active working location assigned. Please contact your head of unit or administrator.";
+        }
+        if($rs && empty($err))
             {//if its sucessfull
 
                 if($doc_dept=='Records'){
@@ -138,7 +128,9 @@
         else
             {
             #echo "<script>alert('Access Denied Please Check Your Credentials');</script>";
-                $err = "Access Denied Please Check Your Credentials";
+                if (empty($err)) {
+                    $err = "Access Denied Please Check Your Credentials";
+                }
             }
 
 
@@ -309,28 +301,7 @@ function getcampusid($campusname,$mysqli){
                                         <label for="password">Password</label>
                                         <input class="form-control" name="ad_pwd" type="password" required="" id="password" placeholder="Enter your password">
                                     </div>
-                                     <div class="form-group mb-3">
-                                                <!-- Pharmacy location selector inline with prescription fields -->
-                                                    
-                                                                <label for="pharmacy_location_select"> Select Campus Location</label>
-                                                                <?php if (!empty($pharmacy_location_name)): ?>
-                                                                    <small class="form-text text-muted">Current: <?php echo htmlspecialchars($pharmacy_location_name); ?></small>
-                                                                <?php endif; ?>
-                                                                <select id="pharmacy_location_select" name="location" class="form-control" required>
-                                                                    <option value="">-- Select --</option>
-                                                                    <?php
-                                                                    $pl_res = $mysqli->query("SELECT id, name FROM campus_locations ORDER BY name ASC");
-                                                                    if ($pl_res) {
-                                                                        while ($pl = $pl_res->fetch_assoc()) {
-                                                                            $selected = (!empty($pharmacy_location_id) && (int)$pharmacy_location_id === (int)$pl['id']) ? 'selected' : '';
-                                                                            echo "<option value='".intval($pl['id'])."' " . $selected . ">".htmlspecialchars($pl['name'])."</option>";
-                                                                        }
-                                                                    }
-                                                                    ?>
-                                                                </select>
-                                                              
-
-                                    </div>
+                                    <!-- Campus/location selection removed: working location is now controlled via staff_locations only -->
 
                                                                             <hr>
                                     <div class="form-group mb-0 text-center">

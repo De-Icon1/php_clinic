@@ -42,6 +42,9 @@
                                 <div class="page-title-box">
                                     
                                     <h4 class="page-title">OOU Hospital Management System Dashboard</h4>
+                                    <?php if (!empty($_SESSION['working_location'])): ?>
+                                        <p class="text-muted mb-0">Current Working Location: <strong><?php echo htmlspecialchars($_SESSION['working_location']); ?></strong></p>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>     
