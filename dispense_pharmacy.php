@@ -6,6 +6,14 @@ session_start();
 include('assets/inc/config.php');
 include('assets/inc/functions.php');
 
+// Resolve staff working location / campus for pharmacy scoping
+$campus_id = null;
+if (isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id'])) {
+  $campus_id = (int) $_SESSION['working_location_id'];
+} elseif (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id'])) {
+  $campus_id = (int) $_SESSION['campus_id'];
+}
+
 /* ============================
    DELETE DRUG (store)
    URL: ?del=<drug_id>
@@ -87,15 +95,39 @@ $store_stmt->execute();
 $store_res = $store_stmt->get_result();
 
 /* ============================
-   Fetch pharmacy rows with location name (if pharmacy_location table exists)
+   Fetch pharmacy rows with location name, scoped by staff working location when possible
    ============================ */
 $pharmacy_sql = "
-    SELECT p.id, p.name, COALESCE(p.quantity, 0) AS quantity, COALESCE(p.amount, 0) AS amount, COALESCE(p.category,'') AS category,
-           COALESCE(pl.name, 'Main Pharmacy') AS location_name, COALESCE(p.pharmacy_location_id, 1) as pharmacy_location_id
-    FROM pharmacy p
-    LEFT JOIN pharmacy_location pl ON p.pharmacy_location_id = pl.id
-    ORDER BY p.id ASC
+  SELECT p.id, p.name, COALESCE(p.quantity, 0) AS quantity, COALESCE(p.amount, 0) AS amount, COALESCE(p.category,'') AS category,
+       COALESCE(pl.name, 'Main Pharmacy') AS location_name, COALESCE(p.pharmacy_location_id, 1) as pharmacy_location_id
+  FROM pharmacy p
+  LEFT JOIN pharmacy_location pl ON p.pharmacy_location_id = pl.id
 ";
+
+// If a working location/campus is set, try to filter pharmacy rows to that location
+if ($campus_id) {
+  $pharm_has_loc = 0;
+  $pharm_has_campus = 0;
+  $resCol1 = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy' AND COLUMN_NAME='pharmacy_location_id'");
+  if ($resCol1) {
+    $row1 = $resCol1->fetch_assoc();
+    $pharm_has_loc = isset($row1['cnt']) ? (int) $row1['cnt'] : 0;
+  }
+  $resCol2 = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy' AND COLUMN_NAME='campus_id'");
+  if ($resCol2) {
+    $row2 = $resCol2->fetch_assoc();
+    $pharm_has_campus = isset($row2['cnt']) ? (int) $row2['cnt'] : 0;
+  }
+
+  if ($pharm_has_loc) {
+    $pharmacy_sql .= " WHERE p.pharmacy_location_id = " . (int) $campus_id;
+  } elseif ($pharm_has_campus) {
+    $pharmacy_sql .= " WHERE p.campus_id = " . (int) $campus_id;
+  }
+}
+
+$pharmacy_sql .= " ORDER BY p.id ASC";
+
 $pharmacy_stmt = $mysqli->prepare($pharmacy_sql);
 $pharmacy_stmt->execute();
 $pharmacy_res = $pharmacy_stmt->get_result();

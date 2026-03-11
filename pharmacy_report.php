@@ -1,9 +1,13 @@
 <?php
 session_start();
 include('assets/inc/config.php');
-// campus scoping (session) — allow per-report override via POST `report_campus_id`
-$report_campus = isset($_POST['report_campus_id']) ? (int)$_POST['report_campus_id'] : null;
-$campus_id = $report_campus ? $report_campus : (isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null);
+// Campus scoping strictly by staff working location (no manual campus override)
+$campus_id = null;
+if (isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id'])) {
+    $campus_id = (int) $_SESSION['working_location_id'];
+} elseif (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id'])) {
+    $campus_id = (int) $_SESSION['campus_id'];
+}
 function table_has_campus($mysqli, $table)
 {
     $t = $mysqli->real_escape_string($table);
@@ -171,46 +175,28 @@ function storeclosingstock($date, $mysqli)
 ?>
 
 <!--End Server Side-->
-<!--End Patient Registration-->
-<!DOCTYPE html>
-<html lang="en">
-    
-    <!--Head-->
-    <?php include('assets/inc/head.php');?>
-    <body>
-
-        <!-- Begin page -->
-        <div id="wrapper">
-
-            <!-- Topbar Start -->
-            <?php include("assets/inc/nav_r.php");?>
-            <!-- end Topbar -->
-
-            <!-- ========== Left Sidebar Start ========== -->
-            <?php include("assets/inc/sidebar_admin.php");?>
-            <!-- Left Sidebar End -->
-
-            <!-- ============================================================== -->
-            <!-- Start Page Content here -->
-            <!-- ============================================================== -->
-
-            <button type="submit" name="genreport" class="ladda-button btn btn-primary">Process Report</button>
-
-            <div class="mt-3">
-                <button type="submit" name="genreport" class="btn btn-info">View Report</button>
-                <button type="submit" name="export_pdf" class="btn btn-danger">Export as PDF</button>
-                <button type="submit" name="export_excel" class="btn btn-success">Export as Excel</button>
-            </div>
-
-
-            <div class="content-page">
-                <div class="content">
-
-                    <!-- Start Content-->
-                    <div class="container-fluid">
-                        
-                        <!-- start page title -->
-                        <div class="row">
+                                        <!--Add Patient Form-->
+                                        <?php
+                                        // Display current working location for context (no campus switching here)
+                                        $location_label = '';
+                                        if (isset($_SESSION['working_location']) && $_SESSION['working_location'] !== '') {
+                                            $location_label = $_SESSION['working_location'];
+                                        } elseif ($campus_id) {
+                                            $stmtLoc = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
+                                            if ($stmtLoc) {
+                                                $stmtLoc->bind_param('i', $campus_id);
+                                                $stmtLoc->execute();
+                                                $rLoc = $stmtLoc->get_result();
+                                                if ($rowL = $rLoc->fetch_assoc()) {
+                                                    $location_label = $rowL['name'];
+                                                }
+                                                $stmtLoc->close();
+                                            }
+                                        }
+                                        if ($location_label !== '') {
+                                            echo '<p><strong>Current Working Location:</strong> '.htmlspecialchars($location_label).'</p>';
+                                        }
+                                        ?>
                             <div class="col-12">
                                 <div class="page-title-box">
                                     <div class="page-title-right">

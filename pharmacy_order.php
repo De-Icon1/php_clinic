@@ -4,11 +4,16 @@
     include('assets/inc/checklogins.php');
   check_login();
   authorize();
-  $aid=$_SESSION['doc_id'];
-   $doc_number = $_SESSION['doc_number'];
+    $aid=$_SESSION['doc_id'];
+     $doc_number = $_SESSION['doc_number'];
 
-    // Campus-aware pharmacy_order handling
-    $campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
+        // Campus/working-location–aware pharmacy_order handling
+        $campus_id = null;
+        if (isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id'])) {
+                $campus_id = (int) $_SESSION['working_location_id'];
+        } elseif (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id'])) {
+                $campus_id = (int) $_SESSION['campus_id'];
+        }
     $order_has_campus = 0;
     if ($campus_id) {
             $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='campus_id'");
@@ -101,7 +106,12 @@ if(isset($_GET['dels'])){
 
 function getphartot($mysqli,$date,$tid){
             $bal=0;
-            $campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
+            $campus_id = null;
+            if (isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id'])) {
+                $campus_id = (int) $_SESSION['working_location_id'];
+            } elseif (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id'])) {
+                $campus_id = (int) $_SESSION['campus_id'];
+            }
             $order_has_campus = 0;
             if ($campus_id) {
                 $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_order' AND COLUMN_NAME='campus_id'");

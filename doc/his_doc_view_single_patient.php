@@ -4,100 +4,33 @@
     check_login();
 
   $doc_id=$_SESSION['doc_id'];
-  $campusid=$_SESSION['campus_id'];
-     $pat_id = isset($_GET['pat_id']) ? $_GET['pat_id'] : '';
-     $pat_name = isset($_GET['pat_name']) ? $_GET['pat_name'] : '';
+  $working_location_id = isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id']) ? (int)$_SESSION['working_location_id'] : null;
+  $working_location_name = isset($_SESSION['working_location']) ? $_SESSION['working_location'] : '';
+      $pat_id = isset($_GET['pat_id']) ? $_GET['pat_id'] : '';
+      $pat_name = isset($_GET['pat_name']) ? $_GET['pat_name'] : '';
   //$doc_number = $_SERVER['doc_number'];
     $date=date('Y-m-d');
 
-// Doctor's campus from session (set at login). Still used for some legacy flows
-$campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null;
+// Resolve staff working location / campus for scoping and labels
+$campus_id = $working_location_id ?: (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null);
 
-// Pharmacy location selection for doctor (same pattern as nurse/lab working location)
-// Detect which table name exists in this installation: `pharmacy_location` or `pharmacy_locations`.
-$pharmacy_location_table = null;
-$res1 = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_location'");
-if ($res1 && $res1->fetch_assoc()['cnt']) {
-    $pharmacy_location_table = 'pharmacy_location';
-} else {
-    $res2 = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy_locations'");
-    if ($res2 && $res2->fetch_assoc()['cnt']) {
-        $pharmacy_location_table = 'pharmacy_locations';
-    }
-}
-
-$pharmacy_location_id   = isset($_SESSION['pharmacy_location_id']) ? (int) $_SESSION['pharmacy_location_id'] : 0;
-$pharmacy_location_name = isset($_SESSION['pharmacy_location_name']) ? $_SESSION['pharmacy_location_name'] : '';
-
-// Allow doctor to set or change pharmacy location explicitly
-if (isset($_POST['set_pharmacy_location'])) {
-    $loc = $_POST['pharmacy_location'];
-    if (is_numeric($loc)) {
-        $id = (int) $loc;
-        // Use detected table name if available
-        if ($pharmacy_location_table) {
-            $sql = "SELECT name FROM {$pharmacy_location_table} WHERE id = ? LIMIT 1";
-            $stmt = $mysqli->prepare($sql);
-            if ($stmt) {
-                $stmt->bind_param('i', $id);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                if ($row = $res->fetch_assoc()) {
-                    $_SESSION['pharmacy_location_id']   = $id;
-                    $_SESSION['pharmacy_location_name'] = $row['name'];
-                    $pharmacy_location_id   = $id;
-                    $pharmacy_location_name = $row['name'];
-                } else {
-                    // store id even if name missing
-                    $_SESSION['pharmacy_location_id']   = $id;
-                    $_SESSION['pharmacy_location_name'] = '';
-                    $pharmacy_location_id   = $id;
-                    $pharmacy_location_name = '';
-                }
-                $stmt->close();
-            }
-        } else {
-            // No locations table found; still store id so other code can use it
-            $_SESSION['pharmacy_location_id']   = $id;
-            $_SESSION['pharmacy_location_name'] = '';
-            $pharmacy_location_id   = $id;
-            $pharmacy_location_name = '';
-        }
-    }
-
-    // redirect back to same patient view to avoid resubmission
-    $redir = "his_doc_view_single_patient.php?pat_id=".urlencode($pat_id)."&&pat_name=".urlencode($pat_name);
-    header("Location: " . $redir);
-    exit;
-}
-
-if (isset($_GET['clear_pharmacy_location'])) {
-    unset($_SESSION['pharmacy_location_id']);
-    unset($_SESSION['pharmacy_location_name']);
-    $pharmacy_location_id   = 0;
-    $pharmacy_location_name = '';
-
-    $redir = "his_doc_view_single_patient.php?pat_id=".urlencode($pat_id)."&&pat_name=".urlencode($pat_name);
-    header("Location: " . $redir);
-    exit;
-}
-
-// Legacy campus label (may still be used as a fallback in some UIs)
-$campus_label = '';
-if ($campus_id) {
+$location_label = '';
+if (!empty($working_location_name)) {
+    $location_label = $working_location_name;
+} elseif ($campus_id) {
     $campusNameStmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1");
     if ($campusNameStmt) {
         $campusNameStmt->bind_param('i', $campus_id);
         $campusNameStmt->execute();
         $cRes = $campusNameStmt->get_result();
         if ($cRow = $cRes->fetch_assoc()) {
-            $campus_label = $cRow['name'];
+            $location_label = $cRow['name'];
         }
         $campusNameStmt->close();
     }
 
-    if ($campus_label === '' || $campus_label === null) {
-        $campus_label = 'Campus ID ' . $campus_id;
+    if ($location_label === '' || $location_label === null) {
+        $location_label = 'Location ID ' . $campus_id;
     }
 }
 
@@ -203,28 +136,6 @@ if(isset($_GET['dels'])){
 
 
       }
-    
-
-function getcampus($campusid,$mysqli){
-    // Gracefully handle missing/invalid campus id to avoid SQL errors
-    if (empty($campusid) || !is_numeric($campusid)) {
-        return 'Unknown Campus';
-    }
-
-    $name = 'Unknown Campus';
-    if ($stmt = $mysqli->prepare("SELECT name FROM campus_locations WHERE id = ? LIMIT 1")) {
-        $cid = (int)$campusid;
-        $stmt->bind_param('i', $cid);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        if ($row = $res->fetch_assoc()) {
-            $name = $row['name'];
-        }
-        $stmt->close();
-    }
-    return $name;
-}
-
 if (isset($_POST['prdrug'])) {
     $date = date('Y-m-d');
     $drug = trim($_POST['drug']);
@@ -265,7 +176,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         die("Prepare failed: " . $mysqli->error);
     }
 
-    // Compute total amount (respect doctor's campus if available)
+    // Compute total amount (respect doctor's working location / campus if available)
     $dtot = getdrugtot($mysqli, $drug, $tot, $campus_id);
     if (!isset($dtot) || $dtot === null || $dtot === '' || !is_numeric($dtot)) {
         $dtot = 0;
@@ -466,10 +377,11 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                        $order_values[] = (int)$campus_id;
                    }
 
-                   $pharmacy_location_id_for_order = isset($_SESSION['pharmacy_location_id']) ? (int) $_SESSION['pharmacy_location_id'] : null;
-                   if ($order_loc_col && $pharmacy_location_id_for_order) {
+                   // Tie pharmacy order location to the staff working location when a pharmacy_location_id column exists
+                   $location_id_for_order = $campus_id;
+                   if ($order_loc_col && $location_id_for_order) {
                        $order_cols[] = 'pharmacy_location_id';
-                       $order_values[] = (int)$pharmacy_location_id_for_order;
+                       $order_values[] = (int)$location_id_for_order;
                    }
 
                    // Build prepared statement dynamically and bind robustly
@@ -525,12 +437,22 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 }
 
-function getdrugtot($mysqli, $dname, $qn, $campus_id = null) {
+function getdrugtot($mysqli, $dname, $qn, $location_id = null) {
     $bal = 0;
     $amnt = 0; // default value
 
-    // Doctor-selected pharmacy location (if any) takes precedence
-    $pharmacy_location_id = isset($_SESSION['pharmacy_location_id']) ? (int) $_SESSION['pharmacy_location_id'] : null;
+    // Resolve effective location id: prefer explicit argument, then working_location_id, then legacy campus_id
+    if (empty($location_id) || !is_numeric($location_id)) {
+        if (isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id'])) {
+            $location_id = (int)$_SESSION['working_location_id'];
+        } elseif (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id'])) {
+            $location_id = (int)$_SESSION['campus_id'];
+        } else {
+            $location_id = null;
+        }
+    } else {
+        $location_id = (int)$location_id;
+    }
 
     // If pharmacy table exists with campus_id, prefer campus-specific amount
     $pharm_table_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy'")->fetch_assoc()['cnt'] ?? 0;
@@ -541,11 +463,11 @@ function getdrugtot($mysqli, $dname, $qn, $campus_id = null) {
         $pharm_loc_col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy' AND COLUMN_NAME='pharmacy_location_id'")->fetch_assoc()['cnt'] ?? 0;
     }
 
-    // First preference: pharmacy_location_id if available and selected
-    if ($pharm_table_exists && $pharm_loc_col_exists && $pharmacy_location_id) {
+    // First preference: location-specific pricing (pharmacy_location_id or campus_id) tied to staff working location
+    if ($pharm_table_exists && $pharm_loc_col_exists && $location_id) {
         $stmt = $mysqli->prepare("SELECT amount FROM pharmacy WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND pharmacy_location_id = ? LIMIT 1");
         if ($stmt) {
-            $stmt->bind_param('si', $dname, $pharmacy_location_id);
+            $stmt->bind_param('si', $dname, $location_id);
             $stmt->execute();
             $stmt->bind_result($amnt);
             $stmt->fetch();
@@ -553,11 +475,11 @@ function getdrugtot($mysqli, $dname, $qn, $campus_id = null) {
         }
     }
 
-    // Second preference: campus_id column (legacy multi-campus model)
-    if (($amnt === 0 || $amnt === null || $amnt === '') && $pharm_table_exists && $pharm_col_exists && $campus_id) {
+    // Second preference: campus_id column (legacy multi-campus model) using same location id
+    if (($amnt === 0 || $amnt === null || $amnt === '') && $pharm_table_exists && $pharm_col_exists && $location_id) {
         $stmt = $mysqli->prepare("SELECT amount FROM pharmacy WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND campus_id = ? LIMIT 1");
         if ($stmt) {
-            $stmt->bind_param('si', $dname, $campus_id);
+            $stmt->bind_param('si', $dname, $location_id);
             $stmt->execute();
             $stmt->bind_result($amnt);
             $stmt->fetch();
@@ -814,7 +736,9 @@ if ($stmt) {
                                         </ol>
                                     </div>
                                     <h4 class="page-title"><?php echo $surn." ".$firstname." ".$mname;?>'s Profile</h4>
-                                    <h2><?php echo getcampus($campusid,$mysqli); ?></h2>
+                                    <?php if (!empty($location_label)): ?>
+                                        <h5>Current Working Location: <?php echo htmlspecialchars($location_label); ?></h5>
+                                    <?php endif; ?>
                                
                                 </div>
                             </div>
@@ -1010,41 +934,12 @@ if ($stmt) {
                                                     </div> <!-- end row -->
 
                                                     <div class="row">
-                                                    <!-- Pharmacy location selector inline with prescription fields -->
-                                                    <div class="col-md-2">
-                                                            <div class="form-group">
-                                                                <label for="pharmacy_location_select">Pharmacy Location</label>
-                                                                <?php if (!empty($pharmacy_location_name)): ?>
-                                                                    <small class="form-text text-muted">Current: <?php echo htmlspecialchars($pharmacy_location_name); ?></small>
-                                                                <?php endif; ?>
-                                                                <select id="pharmacy_location_select" name="pharmacy_location" class="form-control">
-                                                                    <option value="">-- Select --</option>
-                                                                    <?php
-                                                                    // Use the detected locations table name if available
-                                                                    if (!empty($pharmacy_location_table)) {
-                                                                        $pl_res = $mysqli->query("SELECT id, name FROM " . $pharmacy_location_table . " ORDER BY name ASC");
-                                                                        if ($pl_res) {
-                                                                            while ($pl = $pl_res->fetch_assoc()) {
-                                                                                $selected = (!empty($pharmacy_location_id) && (int)$pharmacy_location_id === (int)$pl['id']) ? 'selected' : '';
-                                                                                echo "<option value='".intval($pl['id'])."' " . $selected . ">".htmlspecialchars($pl['name'])."</option>";
-                                                                            }
-                                                                        }
-                                                                    } else {
-                                                                        // No locations table found — nothing to list here.
-                                                                    }
-                                                                    ?>
-                                                                </select>
-                                                                <button type="submit" name="set_pharmacy_location" formnovalidate class="btn btn-sm btn-primary mt-1">Set</button>
-                                                            </div>
-                                                        </div>
 
                                                     <div class="col-md-2">
                                                             <div class="form-group">
                                                                 <label for="lastname">List of Drugs</label>
-                                                                <?php if (!empty($pharmacy_location_name)): ?>
-                                                                    <small class="form-text text-muted">Listing drugs from <?php echo htmlspecialchars($pharmacy_location_name); ?> pharmacy</small>
-                                                                <?php elseif (!empty($campus_label)): ?>
-                                                                    <small class="form-text text-muted">Listing drugs from <?php echo htmlspecialchars($campus_label); ?> pharmacy</small>
+                                                                <?php if (!empty($location_label)): ?>
+                                                                    <small class="form-text text-muted">Listing drugs from <?php echo htmlspecialchars($location_label); ?> pharmacy</small>
                                                                 <?php endif; ?>
                                                                <select id="name" name="drug"  class="form-control">
                                                             <option>Choose</option>
@@ -1060,17 +955,19 @@ if ($stmt) {
                                                                         $pharm_loc_col_exists = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='pharmacy' AND COLUMN_NAME='pharmacy_location_id'")->fetch_assoc()['cnt'] ?? 0;
                                                                     }
 
-                                                                    if ($pharm_table_exists && $pharm_loc_col_exists && !empty($pharmacy_location_id)) {
+                                                                    $location_id_for_drugs = $campus_id;
+
+                                                                    if ($pharm_table_exists && $pharm_loc_col_exists && $location_id_for_drugs) {
                                                                         $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy WHERE pharmacy_location_id = ? ORDER BY name ASC");
-                                                                        $ps->bind_param('i', $pharmacy_location_id);
+                                                                        $ps->bind_param('i', $location_id_for_drugs);
                                                                         $ps->execute();
                                                                         $pres = $ps->get_result();
                                                                         while ($reply = $pres->fetch_assoc()) {
                                                                             echo "<option value=\"".htmlspecialchars($reply['name'])."\">".htmlspecialchars($reply['name'])."</option>";
                                                                         }
-                                                                    } elseif ($pharm_table_exists && $pharm_col_exists && $campus_id) {
+                                                                    } elseif ($pharm_table_exists && $pharm_col_exists && $location_id_for_drugs) {
                                                                         $ps = $mysqli->prepare("SELECT DISTINCT name FROM pharmacy WHERE campus_id = ? ORDER BY name ASC");
-                                                                        $ps->bind_param('i', $campus_id);
+                                                                        $ps->bind_param('i', $location_id_for_drugs);
                                                                         $ps->execute();
                                                                         $pres = $ps->get_result();
                                                                         while ($reply = $pres->fetch_assoc()) {

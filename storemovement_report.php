@@ -1,9 +1,13 @@
 <?php
 session_start();
 include('assets/inc/config.php');
-// Respect campus scoping when available; allow per-report override via GET `report_campus_id`
-$report_campus = isset($_GET['report_campus_id']) ? (int) $_GET['report_campus_id'] : null;
-$campus_id = $report_campus ? $report_campus : (isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null);
+// Respect campus scoping strictly via staff working location (no manual override)
+$campus_id = null;
+if (isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id'])) {
+    $campus_id = (int) $_SESSION['working_location_id'];
+} elseif (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id'])) {
+    $campus_id = (int) $_SESSION['campus_id'];
+}
 function table_has_campus($mysqli, $table)
 {
     $t = $mysqli->real_escape_string($table);
