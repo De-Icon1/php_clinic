@@ -45,6 +45,8 @@
             }
 }
 $gamnt=0;
+// Displayed pharmacy total after applying any student/staff concession
+$pharm_display_total = 0;
 // Default listing of pharmacy_order, optionally scoped by campus
 if ($order_has_campus && $campus_id) {
     $relt = "select * from pharmacy_order where trackid='' AND campus_id=" . (int)$campus_id;
@@ -61,6 +63,23 @@ if(isset($_GET['rel'])){
         $relt="select * from pharmacy_order where trackid='$tid' and date='$date'";
     }
     $gamnt=getphartot($mysqli,$date,$tid);
+
+    // Pre-compute concession-adjusted total for display based on patient code / trackid
+    $pharm_display_total = $gamnt;
+    $codeForCategory = $tid; // default to trackid
+    if (isset($_GET['code']) && trim($_GET['code']) !== '') {
+        $codeForCategory = trim($_GET['code']);
+    }
+    $cidUpper = strtoupper($codeForCategory);
+    if ($cidUpper !== '') {
+        if (strpos($cidUpper, 'ST') === 0) {
+            // Student card: drugs fully subsidised
+            $pharm_display_total = 0;
+        } elseif (strpos($cidUpper, 'S') === 0) {
+            // Staff card: 50% concession on drugs
+            $pharm_display_total = $gamnt / 2;
+        }
+    }
 }
 
 
@@ -220,31 +239,63 @@ if(isset($_POST['payment'])){
                             
 
 if(isset($_POST['pharmacy'])){
-            $tid=$_GET['rel'];
-            $date=$_GET['date'];
-            $tamntp=$_POST['tamntp'];
-             $amntp=$_POST['amntp'];
-                                           
-            $time=date("h:i a" );
-            $officer=getofficer($mysqli,$doc_number);
-    if($tamntp > $amntp || $tamntp < $amntp){
-        $err = "Payment Not Complete,Please Try Again";
-    }
-    else{
-            // For pharmacy orders, hand off to BPMS instead of recording local payment entries.
-            // We keep the order in 'Pending' state here; bpms-report.php will update to 'Paid' when BPMS confirms.
+            $tid = isset($_GET['rel']) ? $_GET['rel'] : '';
+            $date = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
+            $time = date("h:i a" );
+            $officer = getofficer($mysqli,$doc_number);
 
-            $_SESSION['bpms_type']         = 'pharmacy';
-            $_SESSION['bpms_amount']       = $amntp;
-            $_SESSION['bpms_customer']     = isset($_POST['name']) ? $_POST['name'] : '';
-            $_SESSION['bpms_patient_code'] = '';
-            $_SESSION['bpms_trackid']      = $tid;
-            $_SESSION['bpms_teller']       = $tid;
+            // Recompute grand total on the server for safety
+            $baseTotal = getphartot($mysqli, $date, $tid);
+            $paidInput = isset($_POST['amntp']) ? floatval($_POST['amntp']) : 0;
 
-            header('Location: clinic_bpms_start.php');
-            exit;
+            // Prefer explicit patient code from form, but fall back to trackid
+            $patientCode = isset($_POST['code']) ? trim($_POST['code']) : '';
+            $effectiveCode = $patientCode !== '' ? $patientCode : $tid;
+            $codeUpper = strtoupper($effectiveCode);
 
-        }
+            // Determine concession based on patient identity:
+            // - STUDENT CARD (code starts with ST): drugs are free (0 payment)
+            // - STAFF CARD   (code starts with S but not ST): 50% discount
+            // - Others: pay full amount
+            $category = 'OTHER';
+            $expectedPayable = $baseTotal;
+
+            if ($codeUpper !== '') {
+                if (strpos($codeUpper, 'ST') === 0) {
+                    $category = 'STUDENT';
+                    $expectedPayable = 0;
+                } elseif (strpos($codeUpper, 'S') === 0) {
+                    $category = 'STAFF';
+                    $expectedPayable = $baseTotal / 2;
+                }
+            }
+
+            // Round to 2dp for comparison
+            $expectedPayableRounded = round($expectedPayable, 2);
+            $paidRounded = round($paidInput, 2);
+
+            if ($expectedPayableRounded !== $paidRounded) {
+                $err = "Payment mismatch for $category: expected " . number_format($expectedPayableRounded,2) . ", received " . number_format($paidRounded,2);
+            } else {
+                if ($expectedPayableRounded <= 0 && $category === 'STUDENT') {
+                    // Student drugs are fully subsidised: mark order as paid without BPMS payment
+                    if (!empty($tid)) {
+                        $mysqli->query("UPDATE pharmacy_order SET status='Paid' WHERE trackid='".$mysqli->real_escape_string($tid)."' AND date='".$mysqli->real_escape_string($date)."'");
+                    }
+                    $success = "Student drug order marked as paid (no charge).";
+                } else {
+                    // For staff and others, send the discounted/full amount to BPMS
+                    $_SESSION['bpms_type']         = 'pharmacy';
+                    $_SESSION['bpms_amount']       = $expectedPayableRounded;
+                    $_SESSION['bpms_customer']     = isset($_POST['name']) ? $_POST['name'] : '';
+                    $_SESSION['bpms_patient_code'] = $effectiveCode;
+                    $_SESSION['bpms_trackid']      = $tid;
+                    $_SESSION['bpms_teller']       = $tid;
+
+                    header('Location: clinic_bpms_start.php');
+                    exit;
+                }
+            }
     }
                         
 ?>
@@ -567,16 +618,18 @@ if(isset($_POST['pharmacy'])){
                                                 <form method="post">
                                                     <h5 class="mb-4 text-uppercase"><i class="mdi mdi-account-circle mr-1"></i> PHARMACY ORDER</h5>
                                                     <div class="row">
-                                                        <div class="col-md-12">
+                                                        <div class="col-md-6">
+                                                            <div class="form-group">
+                                                                <label for="patcode">Patient Code (optional)</label>
+                                                                <input type="text" name="code" class="form-control" id="patcode" placeholder="Enter Card / Reg No e.g. ST..., S..., IND...">
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
                                                             <div class="form-group">
                                                                 <label for="firstname">Customer's Fullname</label>
                                                                 <input type="text" name="name"  class="form-control" id="firstname" placeholder="Enter Costomer's Name">
                                                             </div>
                                                         </div>
-                                                        
-                                                       
-
-                                                        
                                                     </div>
                                                         <div class="table-responsive">
                                         <table id="demo-foo-filtering" style="background-color:grey;" class="datatable-1 table table-bordered table-striped   display" data-page-size="7">
@@ -686,8 +739,8 @@ if(isset($_POST['pharmacy'])){
                                                    
                                                     <div class="col-md-3">
                                                             <div class="form-group">
-                                                                <label for="lastname">Grand Total</label>
-                                                                <input type="text" class="form-control" style="color:BLUE; font-size:larger; " name="tamntp" value="<?php echo number_format($gamnt,2); ?>" id="lastname" placeholder="Total Amount">
+                                                                <label for="lastname">Grand Total (Amount To Pay)</label>
+                                                                <input type="text" class="form-control" style="color:BLUE; font-size:larger; " name="tamntp" value="<?php echo number_format($pharm_display_total,2); ?>" id="lastname" placeholder="Total Amount" readonly>
                                                             </div>
                                                     </div> 
                                                         
