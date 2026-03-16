@@ -63,9 +63,20 @@
     // If a matric number is supplied via GET, fetch details from UG portal
     $lookup_matric = isset($_GET['lookup_matric']) ? trim($_GET['lookup_matric']) : '';
     if ($lookup_matric !== '') {
-        $students = fetch_ug_students(1, 1, 'deicon', 'deicon', $lookup_matric);
+        $students = fetch_ug_students(1, 50, 'deicon', 'deicon', $lookup_matric);
         if (!empty($students)) {
-            $stu = reset($students);
+            // Prefer an exact regnum match to the matric entered
+            $stu = null;
+            foreach ($students as $candidate) {
+                if (isset($candidate['regnum']) && strcasecmp(trim($candidate['regnum']), trim($lookup_matric)) === 0) {
+                    $stu = $candidate;
+                    break;
+                }
+            }
+            if ($stu === null) {
+                // Fallback: use the first record if no exact match is found
+                $stu = reset($students);
+            }
 
             $pref_matric  = isset($stu['regnum']) ? $stu['regnum'] : $lookup_matric;
             $pref_surn    = isset($stu['sname']) ? $stu['sname'] : '';
