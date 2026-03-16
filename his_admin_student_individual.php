@@ -3,6 +3,10 @@
     session_start();
     include('assets/inc/config.php');
 
+    // Simple status messages for the UI
+    $err = '';
+    $success = '';
+
     // Helper: fetch student records from central UG portal API
     function fetch_ug_students($page = 1, $pageSize = 50, $username = 'deicon', $password = 'deicon', $regnum = null)
     {
@@ -73,50 +77,53 @@
                     break;
                 }
             }
-            if ($stu === null) {
-                // Fallback: use the first record if no exact match is found
-                $stu = reset($students);
-            }
 
-            $pref_matric  = isset($stu['regnum']) ? $stu['regnum'] : $lookup_matric;
-            $pref_surn    = isset($stu['sname']) ? $stu['sname'] : '';
-            $pref_fname   = isset($stu['fname']) ? $stu['fname'] : '';
-            $pref_mname   = isset($stu['mname']) ? $stu['mname'] : '';
-            $pref_dept    = isset($stu['dept']) ? $stu['dept'] : '';
-            $pref_faculty = isset($stu['faculty']) ? $stu['faculty'] : '';
-            $pref_addr    = isset($stu['ad']) ? $stu['ad'] : '';
-            $pref_phone   = isset($stu['tel']) ? $stu['tel'] : '';
-            $pref_nok     = isset($stu['k1nam']) ? $stu['k1nam'] : '';
-            $pref_noknumber = isset($stu['k1tel']) ? $stu['k1tel'] : '';
+            if ($stu !== null) {
+                $pref_matric  = isset($stu['regnum']) ? $stu['regnum'] : $lookup_matric;
+                $pref_surn    = isset($stu['sname']) ? $stu['sname'] : '';
+                $pref_fname   = isset($stu['fname']) ? $stu['fname'] : '';
+                $pref_mname   = isset($stu['mname']) ? $stu['mname'] : '';
+                $pref_dept    = isset($stu['dept']) ? $stu['dept'] : '';
+                $pref_faculty = isset($stu['faculty']) ? $stu['faculty'] : '';
+                $pref_addr    = isset($stu['ad']) ? $stu['ad'] : '';
+                $pref_phone   = isset($stu['tel']) ? $stu['tel'] : '';
+                $pref_nok     = isset($stu['k1nam']) ? $stu['k1nam'] : '';
+                $pref_noknumber = isset($stu['k1tel']) ? $stu['k1tel'] : '';
 
-            // Passport URL from UG portal (if provided by API)
-            if (!empty($stu['pass_url'])) {
-                $pref_passport = $stu['pass_url'];
-            } elseif (!empty($stu['pass']) && !empty($pref_matric)) {
-                // Fallback guess: base URL + matric number pattern, if needed in future
-                $pref_passport = rtrim($stu['pass'], '/') . '/passports/' . preg_replace('/[^A-Z0-9]/i', '', $pref_matric) . '.jpg';
-            }
-
-            // Infer title from sex
-            $sex = isset($stu['sex']) ? strtoupper($stu['sex']) : '';
-            if ($sex === 'MALE') {
-                $pref_title = 'Mr';
-            } elseif ($sex === 'FEMALE') {
-                $pref_title = 'Miss';
-            }
-
-            // DOB is in format dd/mm/yyyy from API; convert to yyyy-mm-dd for HTML date
-            if (!empty($stu['dob'])) {
-                $dob = DateTime::createFromFormat('d/m/Y', $stu['dob']);
-                if ($dob instanceof DateTime) {
-                    $pref_dob = $dob->format('Y-m-d');
-                    $now  = new DateTime();
-                    $diff = $now->diff($dob);
-                    $pref_age = $diff->y;
+                // Passport URL from UG portal (if provided by API)
+                if (!empty($stu['pass_url'])) {
+                    $pref_passport = $stu['pass_url'];
+                } elseif (!empty($stu['pass']) && !empty($pref_matric)) {
+                    // Fallback guess: base URL + matric number pattern, if needed in future
+                    $pref_passport = rtrim($stu['pass'], '/') . '/passports/' . preg_replace('/[^A-Z0-9]/i', '', $pref_matric) . '.jpg';
                 }
+
+                // Infer title from sex
+                $sex = isset($stu['sex']) ? strtoupper($stu['sex']) : '';
+                if ($sex === 'MALE') {
+                    $pref_title = 'Mr';
+                } elseif ($sex === 'FEMALE') {
+                    $pref_title = 'Miss';
+                }
+
+                // DOB is in format dd/mm/yyyy from API; convert to yyyy-mm-dd for HTML date
+                if (!empty($stu['dob'])) {
+                    $dob = DateTime::createFromFormat('d/m/Y', $stu['dob']);
+                    if ($dob instanceof DateTime) {
+                        $pref_dob = $dob->format('Y-m-d');
+                        $now  = new DateTime();
+                        $diff = $now->diff($dob);
+                        $pref_age = $diff->y;
+                    }
+                }
+            } else {
+                // No exact match was found in the API response
+                $pref_matric = $lookup_matric;
+                $err = 'No UG record found for matric ' . htmlspecialchars($lookup_matric);
             }
         } else {
             $pref_matric = $lookup_matric;
+            $err = 'No UG record found for matric ' . htmlspecialchars($lookup_matric);
         }
     }
         if(isset($_POST['add_patient']))
