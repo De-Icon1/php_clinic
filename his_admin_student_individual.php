@@ -2,7 +2,7 @@
 <?php
     session_start();
     include('assets/inc/config.php');
-    
+
     // Helper: fetch student records from central UG portal API
     function fetch_ug_students($page = 1, $pageSize = 50, $username = 'deicon', $password = 'deicon', $regnum = null)
     {
@@ -42,6 +42,62 @@
         }
 
         return $data;
+    }
+
+    // Defaults for pre-filled form values (from UG API)
+    $pref_matric    = '';
+    $pref_title     = '';
+    $pref_surn      = '';
+    $pref_fname     = '';
+    $pref_mname     = '';
+    $pref_dept      = '';
+    $pref_faculty   = '';
+    $pref_dob       = '';
+    $pref_age       = '';
+    $pref_addr      = '';
+    $pref_phone     = '';
+    $pref_nok       = '';
+    $pref_noknumber = '';
+
+    // If a matric number is supplied via GET, fetch details from UG portal
+    $lookup_matric = isset($_GET['lookup_matric']) ? trim($_GET['lookup_matric']) : '';
+    if ($lookup_matric !== '') {
+        $students = fetch_ug_students(1, 1, 'deicon', 'deicon', $lookup_matric);
+        if (!empty($students)) {
+            $stu = reset($students);
+
+            $pref_matric  = isset($stu['regnum']) ? $stu['regnum'] : $lookup_matric;
+            $pref_surn    = isset($stu['sname']) ? $stu['sname'] : '';
+            $pref_fname   = isset($stu['fname']) ? $stu['fname'] : '';
+            $pref_mname   = isset($stu['mname']) ? $stu['mname'] : '';
+            $pref_dept    = isset($stu['dept']) ? $stu['dept'] : '';
+            $pref_faculty = isset($stu['faculty']) ? $stu['faculty'] : '';
+            $pref_addr    = isset($stu['ad']) ? $stu['ad'] : '';
+            $pref_phone   = isset($stu['tel']) ? $stu['tel'] : '';
+            $pref_nok     = isset($stu['k1nam']) ? $stu['k1nam'] : '';
+            $pref_noknumber = isset($stu['k1tel']) ? $stu['k1tel'] : '';
+
+            // Infer title from sex
+            $sex = isset($stu['sex']) ? strtoupper($stu['sex']) : '';
+            if ($sex === 'MALE') {
+                $pref_title = 'Mr';
+            } elseif ($sex === 'FEMALE') {
+                $pref_title = 'Miss';
+            }
+
+            // DOB is in format dd/mm/yyyy from API; convert to yyyy-mm-dd for HTML date
+            if (!empty($stu['dob'])) {
+                $dob = DateTime::createFromFormat('d/m/Y', $stu['dob']);
+                if ($dob instanceof DateTime) {
+                    $pref_dob = $dob->format('Y-m-d');
+                    $now  = new DateTime();
+                    $diff = $now->diff($dob);
+                    $pref_age = $diff->y;
+                }
+            }
+        } else {
+            $pref_matric = $lookup_matric;
+        }
     }
         if(isset($_POST['add_patient']))
         {
@@ -145,6 +201,17 @@
                                 <div class="card">
                                     <div class="card-body">
                                        
+                                        <!-- Lookup from UG portal by matric number -->
+                                        <form method="get" action="his_admin_student_individual.php" class="form-inline mb-3">
+                                            <div class="form-group col-md-4">
+                                                <label for="lookupMatric" class="col-form-label">Fetch From UG Portal (Matric No)</label>
+                                                <input type="text" name="lookup_matric" id="lookupMatric" class="form-control" style="color:blue;" value="<?php echo htmlspecialchars($lookup_matric); ?>" placeholder="Enter Matric No and click Fetch">
+                                            </div>
+                                            <div class="form-group col-md-2" style="margin-top:32px;">
+                                                <button type="submit" class="btn btn-secondary">Fetch</button>
+                                            </div>
+                                        </form>
+
                                         <!--Add Patient Form-->
                                         <form method="post" action="<?php $_SERVER['PHP_SELF']; ?>" enctype="multipart/form-data" >
                                              <div class="form-row">
@@ -156,7 +223,7 @@
 
                                                 <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label"><h3>Student Matric Number</h3></label>
-                                                    <input required="required" type="text" style="color:blue;" name="pat_matric" class="form-control" id="inputCity" placeholder="Matric no">
+                                                    <input required="required" type="text" style="color:blue;" name="pat_matric" class="form-control" id="inputCity" placeholder="Matric no" value="<?php echo htmlspecialchars($pref_matric); ?>">
                                                 </div>
                                                
                                                 <div class="form-group col-md-4">
@@ -169,62 +236,62 @@
                                                  <div class="form-group col-md-4">
                                                     <label for="inputState" class="col-form-label">Title</label>
                                                     <select id="inputState" required="required" name="title" class="form-control">
-                                                        <option>Choose</option>
-                                                         <option value="Mr">Mr</option>
-                                                        <option value="Miss">Miss</option>
-                                                        <option value="Mrs">Mrs</option>
+                                                        <option value="">Choose</option>
+                                                        <option value="Mr" <?php if($pref_title=='Mr') echo 'selected'; ?>>Mr</option>
+                                                        <option value="Miss" <?php if($pref_title=='Miss') echo 'selected'; ?>>Miss</option>
+                                                        <option value="Mrs" <?php if($pref_title=='Mrs') echo 'selected'; ?>>Mrs</option>
                                                     </select>
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputEmail4" class="col-form-label">Surname</label>
-                                                    <input type="text" required="required" name="surn" class="form-control" id="inputEmail4" placeholder="Patient's Surname ">
+                                                    <input type="text" required="required" name="surn" class="form-control" id="inputEmail4" placeholder="Patient's Surname " value="<?php echo htmlspecialchars($pref_surn); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputEmail4" class="col-form-label">First Name</label>
-                                                    <input type="text" required="required" name="fname" class="form-control" id="inputEmail4" placeholder="Patient's First Name">
+                                                    <input type="text" required="required" name="fname" class="form-control" id="inputEmail4" placeholder="Patient's First Name" value="<?php echo htmlspecialchars($pref_fname); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputPassword4" class="col-form-label">Middle Name</label>
-                                                    <input required="required" type="text" name="mname" class="form-control"  id="inputPassword4" placeholder="Patient`s Middle Name">
+                                                    <input required="required" type="text" name="mname" class="form-control"  id="inputPassword4" placeholder="Patient`s Middle Name" value="<?php echo htmlspecialchars($pref_mname); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputPassword4" class="col-form-label">Department</label>
-                                                    <input required="required" type="text" name="dept" class="form-control"  id="inputPassword4" placeholder="Department">
+                                                    <input required="required" type="text" name="dept" class="form-control"  id="inputPassword4" placeholder="Department" value="<?php echo htmlspecialchars($pref_dept); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputPassword4" class="col-form-label">Faculty</label>
-                                                    <input required="required" type="text" name="faculty" class="form-control"  id="inputPassword4" placeholder="Faculty">
+                                                    <input required="required" type="text" name="faculty" class="form-control"  id="inputPassword4" placeholder="Faculty" value="<?php echo htmlspecialchars($pref_faculty); ?>">
                                                 </div>
                                             </div>
 
                                             <div class="form-row">
                                                 <div class="form-group col-md-6">
                                                     <label for="inputEmail4" class="col-form-label">Date Of Birth</label>
-                                                    <input type="date" required="required" name="dob" class="form-control" id="inputEmail4" placeholder="DD/MM/YYYY">
+                                                    <input type="date" required="required" name="dob" class="form-control" id="inputEmail4" placeholder="DD/MM/YYYY" value="<?php echo htmlspecialchars($pref_dob); ?>">
                                                 </div>
                                                 <div class="form-group col-md-6">
                                                     <label for="inputPassword4" class="col-form-label">Age</label>
-                                                    <input required="required" type="text" name="age" class="form-control"  id="inputPassword4" placeholder="Patient`s Age">
+                                                    <input required="required" type="text" name="age" class="form-control"  id="inputPassword4" placeholder="Patient`s Age" value="<?php echo htmlspecialchars($pref_age); ?>">
                                                 </div>
                                             </div>
 
                                             <div class="form-group">
                                                 <label for="inputAddress" class="col-form-label">Address</label>
-                                                <input required="required" type="text" class="form-control" name="add" id="inputAddress" placeholder="Patient's Addresss">
+                                                <input required="required" type="text" class="form-control" name="add" id="inputAddress" placeholder="Patient's Addresss" value="<?php echo htmlspecialchars($pref_addr); ?>">
                                             </div>
 
                                             <div class="form-row">
                                                 <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label">Mobile Number</label>
-                                                    <input required="required" type="text" name="phone" class="form-control" id="inputCity">
+                                                    <input required="required" type="text" name="phone" class="form-control" id="inputCity" value="<?php echo htmlspecialchars($pref_phone); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label">Patient NOK</label>
-                                                    <input required="required" type="text" name="nok" class="form-control" id="inputCity">
+                                                    <input required="required" type="text" name="nok" class="form-control" id="inputCity" value="<?php echo htmlspecialchars($pref_nok); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label">NOK Mobile Number</label>
-                                                    <input required="required" type="text" name="noknumber" class="form-control" id="inputCity">
+                                                    <input required="required" type="text" name="noknumber" class="form-control" id="inputCity" value="<?php echo htmlspecialchars($pref_noknumber); ?>">
                                                 </div>
 
                                                 <div class="form-group col-md-4">
@@ -307,81 +374,30 @@
                                                 <th data-hide="phone" style="color:white;">Registration</th>
                                                 <th data-hide="phone" style="color:white;">Title</th>
                                                 <th data-hide="phone" style="color:white;">Surname</th>
-                                            // Prefer live data from central UG portal; fall back to local table on failure
-                                            $students = fetch_ug_students(1, 100);
-                                            $cnt = 1;
-
-                                            if (!empty($students)) {
-                                                foreach ($students as $stu) {
-                                                    $regnum   = isset($stu['regnum']) ? $stu['regnum'] : '';
-                                                    $surname  = isset($stu['sname']) ? $stu['sname'] : '';
-                                                    $fname    = isset($stu['fname']) ? $stu['fname'] : '';
-                                                    $mname    = isset($stu['mname']) ? $stu['mname'] : '';
-                                                    $dept     = isset($stu['dept']) ? $stu['dept'] : '';
-                                                    $faculty  = isset($stu['faculty']) ? $stu['faculty'] : '';
-                                                    $dobStr   = isset($stu['dob']) ? $stu['dob'] : '';
-                                                    $phone    = isset($stu['tel']) ? $stu['tel'] : '';
-                                                    $address  = isset($stu['ad']) ? $stu['ad'] : '';
-                                                    $sex      = isset($stu['sex']) ? strtoupper($stu['sex']) : '';
-
-                                                    // Infer simple title from sex where possible
-                                                    $title = '';
-                                                    if ($sex === 'MALE') {
-                                                        $title = 'Mr';
-                                                    } elseif ($sex === 'FEMALE') {
-                                                        $title = 'Miss';
-                                                    }
-
-                                                    // Compute age from DOB in format dd/mm/yyyy if available
-                                                    $age = '';
-                                                    if (!empty($dobStr)) {
-                                                        $dobParts = explode('/', $dobStr);
-                                                        if (count($dobParts) === 3) {
-                                                            $d = (int) $dobParts[0];
-                                                            $m = (int) $dobParts[1];
-                                                            $y = (int) $dobParts[2];
-                                                            if ($y > 0 && $m > 0 && $d > 0) {
-                                                                $dob = DateTime::createFromFormat('d/m/Y', $dobStr);
-                                                                if ($dob instanceof DateTime) {
-                                                                    $now  = new DateTime();
-                                                                    $diff = $now->diff($dob);
-                                                                    $age  = $diff->y;
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-
-                                            ?>
+                                                <th data-hide="phone" style="color:white;">Firstname</th>
+                                                <th data-hide="phone" style="color:white;">Middlename</th>
+                                                <th data-hide="phone" style="color:white;">Department</th>
+                                                <th data-hide="phone" style="color:white;">Faculty</th>
+                                                <th data-hide="phone" style="color:white;">Age</th>
+                                                <th data-hide="phone" style="color:white;">MStatus</th>
+                                                <th data-hide="phone" style="color:white;">DOB</th>
+                                                <th data-hide="phone" style="color:white;">Phone</th>
+                                                <th data-hide="phone" style="color:white;">Address</th>
+                                                <th data-hide="phone" style="color:white;">Action</th>
+                                            </tr>
                                             </thead>
                                             <?php
                                             /*
-                                                    <td><?php echo $cnt;?></td>
-                                                    <td><?php echo htmlentities($regnum);?></td>
-                                                    <td><?php echo htmlentities($regnum);?></td>
-                                                    <td></td>
-                                                    <td><?php echo htmlentities($title);?></td>
-                                                    <td><?php echo htmlentities($surname);?></td>
-                                                    <td><?php echo htmlentities($fname);?></td>
-                                                    <td><?php echo htmlentities($mname);?></td>
-                                                    <td><?php echo htmlentities($dept);?></td>
-                                                    <td><?php echo htmlentities($faculty);?></td>
-                                                    <td><?php echo htmlentities($age);?></td>
-                                                    <td></td>
-                                                    <td><?php echo htmlentities($dobStr);?></td>
-                                                    <td><?php echo htmlentities($phone);?></td>
-                                                    <td><?php echo htmlentities($address);?></td>
-                                                    <td><a href="his_admin_student_individual.php?code=<?php echo urlencode($regnum);?>" class="badge badge-success"><i class="far fa-eye "></i> View</a></td>
-                                                    <td><?php echo $row->reg_date;?></td>
-                                                    <td><?php echo $row->title;?></td>
-                                            <?php  $cnt = $cnt +1 ; }
-                                            } else {
-                                                // Fallback to local student table if API is unavailable
-                                                $ret = "SELECT * FROM  student ORDER BY id DESC ";
-                                                $stmt = $mysqli->prepare($ret);
-                                                $stmt->execute();
-                                                $res = $stmt->get_result();
-                                                $cnt = 1;
-                                                while ($row = $res->fetch_object()) {
+                                                *get details of allpatients
+                                                *
+                                            */
+                                                $ret="SELECT * FROM  student ORDER BY id DESC "; 
+                                                $stmt= $mysqli->prepare($ret) ;
+                                                $stmt->execute() ;//ok
+                                                $res=$stmt->get_result();
+                                                $cnt=1;
+                                                while($row=$res->fetch_object())
+                                                {
                                             ?>
 
                                                 <tbody>
@@ -393,21 +409,6 @@
                                                     <td><?php echo $row->title;?></td>
                                                     <td><?php echo $row->surname;?></td>
                                                     <td><?php echo $row->firstname;?></td>
-                                                    <td><?php echo $row->middlename;?></td>
-                                                    <td><?php echo $row->dept;?></td>
-                                                    <td><?php echo $row->faculty;?></td>
-                                                    <td><?php echo $row->age;?></td>
-                                                    <td><?php echo $row->marital_status;?></td>
-                                                    <td><?php echo $row->reg_date;?></td>
-                                                    <td><?php echo $row->phone;?></td>
-                                                    <td><?php echo $row->address;?></td>
-                                                    <td><a href="his_admin_student_individual.php?code=<?php echo $row->stcode;?>" class="badge badge-success"><i class="far fa-eye "></i> View</a></td>
-                                                </tr>
-                                                </tbody>
-                                            <?php $cnt = $cnt + 1; }
-                                            }
-                                            ?>
-                                            <tfoot>
                                                     <td><?php echo $row->middlename;?></td>
                                                     <td><?php echo $row->dept;?></td>
                                                     <td><?php echo $row->faculty;?></td>
