@@ -2,6 +2,47 @@
 <?php
     session_start();
     include('assets/inc/config.php');
+    
+    // Helper: fetch student records from central UG portal API
+    function fetch_ug_students($page = 1, $pageSize = 50, $username = 'deicon', $password = 'deicon', $regnum = null)
+    {
+        $baseUrl = 'https://portal.oouagoiwoye.edu.ng/api/get_users.php';
+
+        $params = array(
+            'data'      => 'UG',
+            'page'      => (int) $page,
+            'page_size' => (int) $pageSize,
+            'username'  => $username,
+            'password'  => $password,
+        );
+
+        if (!empty($regnum)) {
+            $params['regnum'] = $regnum;
+        }
+
+        $url = $baseUrl . '?' . http_build_query($params);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, array(
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT        => 20,
+        ));
+
+        $response = curl_exec($ch);
+        if ($response === false) {
+            curl_close($ch);
+            return array();
+        }
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+        if (!is_array($data)) {
+            return array();
+        }
+
+        return $data;
+    }
         if(isset($_POST['add_patient']))
         {
             $pat_stcode=$_POST['pat_stcode'];
@@ -266,30 +307,81 @@
                                                 <th data-hide="phone" style="color:white;">Registration</th>
                                                 <th data-hide="phone" style="color:white;">Title</th>
                                                 <th data-hide="phone" style="color:white;">Surname</th>
-                                                <th data-hide="phone" style="color:white;">Firstname</th>
-                                                <th data-hide="phone" style="color:white;">Middlename</th>
-                                                <th data-hide="phone" style="color:white;">Department</th>
-                                                <th data-hide="phone" style="color:white;">Faculty</th>
-                                                <th data-hide="phone" style="color:white;">Age</th>
-                                                <th data-hide="phone" style="color:white;">MStatus</th>
-                                                <th data-hide="phone" style="color:white;">DOB</th>
-                                                <th data-hide="phone" style="color:white;">Phone</th>
-                                                <th data-hide="phone" style="color:white;">Address</th>
-                                                <th data-hide="phone" style="color:white;">Action</th>
-                                            </tr>
+                                            // Prefer live data from central UG portal; fall back to local table on failure
+                                            $students = fetch_ug_students(1, 100);
+                                            $cnt = 1;
+
+                                            if (!empty($students)) {
+                                                foreach ($students as $stu) {
+                                                    $regnum   = isset($stu['regnum']) ? $stu['regnum'] : '';
+                                                    $surname  = isset($stu['sname']) ? $stu['sname'] : '';
+                                                    $fname    = isset($stu['fname']) ? $stu['fname'] : '';
+                                                    $mname    = isset($stu['mname']) ? $stu['mname'] : '';
+                                                    $dept     = isset($stu['dept']) ? $stu['dept'] : '';
+                                                    $faculty  = isset($stu['faculty']) ? $stu['faculty'] : '';
+                                                    $dobStr   = isset($stu['dob']) ? $stu['dob'] : '';
+                                                    $phone    = isset($stu['tel']) ? $stu['tel'] : '';
+                                                    $address  = isset($stu['ad']) ? $stu['ad'] : '';
+                                                    $sex      = isset($stu['sex']) ? strtoupper($stu['sex']) : '';
+
+                                                    // Infer simple title from sex where possible
+                                                    $title = '';
+                                                    if ($sex === 'MALE') {
+                                                        $title = 'Mr';
+                                                    } elseif ($sex === 'FEMALE') {
+                                                        $title = 'Miss';
+                                                    }
+
+                                                    // Compute age from DOB in format dd/mm/yyyy if available
+                                                    $age = '';
+                                                    if (!empty($dobStr)) {
+                                                        $dobParts = explode('/', $dobStr);
+                                                        if (count($dobParts) === 3) {
+                                                            $d = (int) $dobParts[0];
+                                                            $m = (int) $dobParts[1];
+                                                            $y = (int) $dobParts[2];
+                                                            if ($y > 0 && $m > 0 && $d > 0) {
+                                                                $dob = DateTime::createFromFormat('d/m/Y', $dobStr);
+                                                                if ($dob instanceof DateTime) {
+                                                                    $now  = new DateTime();
+                                                                    $diff = $now->diff($dob);
+                                                                    $age  = $diff->y;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                            ?>
                                             </thead>
                                             <?php
                                             /*
-                                                *get details of allpatients
-                                                *
-                                            */
-                                                $ret="SELECT * FROM  student ORDER BY id DESC "; 
-                                                $stmt= $mysqli->prepare($ret) ;
-                                                $stmt->execute() ;//ok
-                                                $res=$stmt->get_result();
-                                                $cnt=1;
-                                                while($row=$res->fetch_object())
-                                                {
+                                                    <td><?php echo $cnt;?></td>
+                                                    <td><?php echo htmlentities($regnum);?></td>
+                                                    <td><?php echo htmlentities($regnum);?></td>
+                                                    <td></td>
+                                                    <td><?php echo htmlentities($title);?></td>
+                                                    <td><?php echo htmlentities($surname);?></td>
+                                                    <td><?php echo htmlentities($fname);?></td>
+                                                    <td><?php echo htmlentities($mname);?></td>
+                                                    <td><?php echo htmlentities($dept);?></td>
+                                                    <td><?php echo htmlentities($faculty);?></td>
+                                                    <td><?php echo htmlentities($age);?></td>
+                                                    <td></td>
+                                                    <td><?php echo htmlentities($dobStr);?></td>
+                                                    <td><?php echo htmlentities($phone);?></td>
+                                                    <td><?php echo htmlentities($address);?></td>
+                                                    <td><a href="his_admin_student_individual.php?code=<?php echo urlencode($regnum);?>" class="badge badge-success"><i class="far fa-eye "></i> View</a></td>
+                                                    <td><?php echo $row->reg_date;?></td>
+                                                    <td><?php echo $row->title;?></td>
+                                            <?php  $cnt = $cnt +1 ; }
+                                            } else {
+                                                // Fallback to local student table if API is unavailable
+                                                $ret = "SELECT * FROM  student ORDER BY id DESC ";
+                                                $stmt = $mysqli->prepare($ret);
+                                                $stmt->execute();
+                                                $res = $stmt->get_result();
+                                                $cnt = 1;
+                                                while ($row = $res->fetch_object()) {
                                             ?>
 
                                                 <tbody>
@@ -301,6 +393,21 @@
                                                     <td><?php echo $row->title;?></td>
                                                     <td><?php echo $row->surname;?></td>
                                                     <td><?php echo $row->firstname;?></td>
+                                                    <td><?php echo $row->middlename;?></td>
+                                                    <td><?php echo $row->dept;?></td>
+                                                    <td><?php echo $row->faculty;?></td>
+                                                    <td><?php echo $row->age;?></td>
+                                                    <td><?php echo $row->marital_status;?></td>
+                                                    <td><?php echo $row->reg_date;?></td>
+                                                    <td><?php echo $row->phone;?></td>
+                                                    <td><?php echo $row->address;?></td>
+                                                    <td><a href="his_admin_student_individual.php?code=<?php echo $row->stcode;?>" class="badge badge-success"><i class="far fa-eye "></i> View</a></td>
+                                                </tr>
+                                                </tbody>
+                                            <?php $cnt = $cnt + 1; }
+                                            }
+                                            ?>
+                                            <tfoot>
                                                     <td><?php echo $row->middlename;?></td>
                                                     <td><?php echo $row->dept;?></td>
                                                     <td><?php echo $row->faculty;?></td>
