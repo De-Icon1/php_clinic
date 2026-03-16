@@ -1,5 +1,5 @@
-<!--Server side code to handle  Patient Registration-->
 <?php
+// Server side code to handle Patient Registration
     session_start();
     include('assets/inc/config.php');
 
@@ -118,6 +118,10 @@
             $noknumber=$_POST['noknumber'];
              $mstatus=$_POST['mstatus'];
             $pics=$_FILES["pics"]["name"];
+
+            // Ensure department/faculty strings fit DB column sizes (dept/faculty are VARCHAR(20))
+            $pat_dept = substr($pat_dept, 0, 20);
+            $pat_faculty = substr($pat_faculty, 0, 20);
             
             
 //$dir="productimages";

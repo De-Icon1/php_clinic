@@ -8,13 +8,47 @@ session_start();
 $query  = isset($_SERVER['QUERY_STRING']) ? $_SERVER['QUERY_STRING'] : '';
 $target = 'https://payments.oouagoiwoye.edu.ng/new-transaction.php';
 if ($query !== '') {
-    $target .= '?' . $query;
+	$target .= '?' . $query;
 }
 
 header('Location: ' . $target);
 exit;
 
-<?php
+/*
+$title = "Generate Invoice";
+session_start();
+function test_input($data)
+{
+
+	$data = trim($data);
+	$data = stripslashes($data);
+	$data = htmlspecialchars($data);
+	$data = mysql_real_escape_string($data);
+
+	return $data;
+}
+
+
+
+include("head.php");
+include("../bpms/bpms-dbconnect.php");
+require "../bpms/bpms-functions.php";
+include("dbconfig.php");
+
+
+
+if ($close != 0) {
+	?>
+<script language="javascript">
+alert("SORRY PAYMENTS HAS BEEN TEMPORARILY CLOSED");
+</script>
+	<?php exit;
+}
+?>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<script language="javascript" type="text/javascript">
+// (legacy invoice page code retained for reference only)
+*/
 $title = "Generate Invoice";
 session_start();
 function test_input($data)

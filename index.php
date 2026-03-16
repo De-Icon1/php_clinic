@@ -67,18 +67,18 @@
 
                 if($doc_dept=='Records'){
                     log_action($doc_id,"LOGIN");
-                    header("location:record_dashboard.php?$campid");
+                    header("location:record_dashboard.php");
                     }
                     else if($doc_dept=='Nursing')
                     {
                         log_action($doc_id,"LOGIN");
-                        header("location:nursing_dashboard.php?$campid");
+                        header("location:nursing_dashboard.php");
 
                     }
                     else if($doc_dept=='Administrator')
                     {
                         log_action($doc_id,"LOGIN");
-                        header("location:admin_dashboard.php?$campid");
+                        header("location:admin_dashboard.php");
 
                     }
                     else if($doc_dept=='Cashier')
