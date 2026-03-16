@@ -58,6 +58,7 @@
     $pref_phone     = '';
     $pref_nok       = '';
     $pref_noknumber = '';
+    $pref_passport  = '';
 
     // If a matric number is supplied via GET, fetch details from UG portal
     $lookup_matric = isset($_GET['lookup_matric']) ? trim($_GET['lookup_matric']) : '';
@@ -76,6 +77,14 @@
             $pref_phone   = isset($stu['tel']) ? $stu['tel'] : '';
             $pref_nok     = isset($stu['k1nam']) ? $stu['k1nam'] : '';
             $pref_noknumber = isset($stu['k1tel']) ? $stu['k1tel'] : '';
+
+            // Passport URL from UG portal (if provided by API)
+            if (!empty($stu['pass_url'])) {
+                $pref_passport = $stu['pass_url'];
+            } elseif (!empty($stu['pass']) && !empty($pref_matric)) {
+                // Fallback guess: base URL + matric number pattern, if needed in future
+                $pref_passport = rtrim($stu['pass'], '/') . '/passports/' . preg_replace('/[^A-Z0-9]/i', '', $pref_matric) . '.jpg';
+            }
 
             // Infer title from sex
             $sex = isset($stu['sex']) ? strtoupper($stu['sex']) : '';
@@ -315,8 +324,8 @@
                                                         </div>
                                                         <div class="col-md-4">
                                                          <div class="form-group">
-                                                                <label for="inputState" class="col-form-label">Uploaded Picture</label>
-                                                               <img alt="" class=" img-thumbnail pull-right" id="hpass" src="#" width="300" height="220"  />                                                            </div>
+                                                                <label for="inputState" class="col-form-label">Uploaded / Portal Picture</label>
+                                                               <img alt="Student passport" class=" img-thumbnail pull-right" id="hpass" src="<?php echo $pref_passport ? htmlspecialchars($pref_passport) : '#'; ?>" width="300" height="220"  />                                                            </div>
                                                 </div>
                                                 <div class="col-md-4">
                                                          <div class="form-group">
