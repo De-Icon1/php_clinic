@@ -7,7 +7,7 @@
     $err = '';
     $success = '';
 
-    // Helper: fetch student records via local OOU proxy API
+    // Helper: fetch student records via local OOU proxy API (single page)
     // Note: $username and $password are no longer used; kept for compatibility.
     function fetch_ug_students($page = 1, $pageSize = 50, $username = null, $password = null, $regnum = null)
     {
@@ -53,8 +53,37 @@
             return array();
         }
 
-        // Return only the student list portion
+        // Return only the student list portion (normalised array)
         return $data['data'];
+    }
+
+    // Helper: find a single student by matric by scanning multiple pages
+    function find_ug_student_by_matric($matric, $maxPages = 20, $pageSize = 100)
+    {
+        $matricNorm = strtoupper(trim($matric));
+
+        for ($page = 1; $page <= $maxPages; $page++) {
+            // We deliberately do NOT rely on regnum filtering upstream,
+            // because the external API may ignore that parameter.
+            $students = fetch_ug_students($page, $pageSize);
+
+            if (empty($students)) {
+                // No more data available
+                break;
+            }
+
+            foreach ($students as $candidate) {
+                if (!isset($candidate['matric_no'])) {
+                    continue;
+                }
+
+                if (strtoupper(trim($candidate['matric_no'])) === $matricNorm) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     // Defaults for pre-filled form values (from UG API)
@@ -76,59 +105,45 @@
     // If a matric number is supplied via GET, fetch details from UG portal
     $lookup_matric = isset($_GET['lookup_matric']) ? trim($_GET['lookup_matric']) : '';
     if ($lookup_matric !== '') {
-        $students = fetch_ug_students(1, 50, 'deicon', 'deicon', $lookup_matric);
-        if (!empty($students)) {
-            // Prefer an exact regnum match to the matric entered
-            $stu = null;
-            foreach ($students as $candidate) {
-                if (isset($candidate['matric_no']) && strcasecmp(trim($candidate['matric_no']), trim($lookup_matric)) === 0) {
-                    $stu = $candidate;
-                    break;
-                }
+        $stu = find_ug_student_by_matric($lookup_matric);
+
+        if ($stu !== null) {
+            $pref_matric  = isset($stu['matric_no']) ? $stu['matric_no'] : $lookup_matric;
+            $pref_surn    = isset($stu['surname']) ? $stu['surname'] : '';
+            $pref_fname   = isset($stu['first_name']) ? $stu['first_name'] : '';
+            $pref_mname   = isset($stu['middle_name']) ? $stu['middle_name'] : '';
+            $pref_dept    = isset($stu['department']) ? $stu['department'] : '';
+            $pref_faculty = isset($stu['faculty']) ? $stu['faculty'] : '';
+            $pref_addr    = isset($stu['address']) ? $stu['address'] : '';
+            $pref_phone   = isset($stu['phone']) ? $stu['phone'] : '';
+            $pref_nok     = isset($stu['nok']) ? $stu['nok'] : '';
+            $pref_noknumber = isset($stu['nok_phone']) ? $stu['nok_phone'] : '';
+
+            // Passport URL from UG portal (if provided by API)
+            if (!empty($stu['passport_url'])) {
+                $pref_passport = $stu['passport_url'];
+            } elseif (!empty($stu['pass']) && !empty($pref_matric)) {
+                // Fallback guess: base URL + matric number pattern, if needed in future
+                $pref_passport = rtrim($stu['pass'], '/') . '/passports/' . preg_replace('/[^A-Z0-9]/i', '', $pref_matric) . '.jpg';
             }
 
-            if ($stu !== null) {
-                $pref_matric  = isset($stu['matric_no']) ? $stu['matric_no'] : $lookup_matric;
-                $pref_surn    = isset($stu['surname']) ? $stu['surname'] : '';
-                $pref_fname   = isset($stu['first_name']) ? $stu['first_name'] : '';
-                $pref_mname   = isset($stu['middle_name']) ? $stu['middle_name'] : '';
-                $pref_dept    = isset($stu['department']) ? $stu['department'] : '';
-                $pref_faculty = isset($stu['faculty']) ? $stu['faculty'] : '';
-                $pref_addr    = isset($stu['address']) ? $stu['address'] : '';
-                $pref_phone   = isset($stu['phone']) ? $stu['phone'] : '';
-                $pref_nok     = isset($stu['nok']) ? $stu['nok'] : '';
-                $pref_noknumber = isset($stu['nok_phone']) ? $stu['nok_phone'] : '';
+            // Infer title from sex
+            $sex = isset($stu['sex']) ? strtoupper($stu['sex']) : '';
+            if ($sex === 'MALE') {
+                $pref_title = 'Mr';
+            } elseif ($sex === 'FEMALE') {
+                $pref_title = 'Miss';
+            }
 
-                // Passport URL from UG portal (if provided by API)
-                if (!empty($stu['passport_url'])) {
-                    $pref_passport = $stu['passport_url'];
-                } elseif (!empty($stu['pass']) && !empty($pref_matric)) {
-                    // Fallback guess: base URL + matric number pattern, if needed in future
-                    $pref_passport = rtrim($stu['pass'], '/') . '/passports/' . preg_replace('/[^A-Z0-9]/i', '', $pref_matric) . '.jpg';
+            // DOB is in format dd/mm/yyyy from API; convert to yyyy-mm-dd for HTML date
+            if (!empty($stu['dob'])) {
+                $dob = DateTime::createFromFormat('d/m/Y', $stu['dob']);
+                if ($dob instanceof DateTime) {
+                    $pref_dob = $dob->format('Y-m-d');
+                    $now  = new DateTime();
+                    $diff = $now->diff($dob);
+                    $pref_age = $diff->y;
                 }
-
-                // Infer title from sex
-                $sex = isset($stu['sex']) ? strtoupper($stu['sex']) : '';
-                if ($sex === 'MALE') {
-                    $pref_title = 'Mr';
-                } elseif ($sex === 'FEMALE') {
-                    $pref_title = 'Miss';
-                }
-
-                // DOB is in format dd/mm/yyyy from API; convert to yyyy-mm-dd for HTML date
-                if (!empty($stu['dob'])) {
-                    $dob = DateTime::createFromFormat('d/m/Y', $stu['dob']);
-                    if ($dob instanceof DateTime) {
-                        $pref_dob = $dob->format('Y-m-d');
-                        $now  = new DateTime();
-                        $diff = $now->diff($dob);
-                        $pref_age = $diff->y;
-                    }
-                }
-            } else {
-                // No exact match was found in the API response
-                $pref_matric = $lookup_matric;
-                $err = 'No UG record found for matric ' . htmlspecialchars($lookup_matric);
             }
         } else {
             $pref_matric = $lookup_matric;
