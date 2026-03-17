@@ -7,17 +7,23 @@
     $err = '';
     $success = '';
 
-    // Helper: fetch student records from central UG portal API
-    function fetch_ug_students($page = 1, $pageSize = 50, $username = 'deicon', $password = 'deicon', $regnum = null)
+    // Helper: fetch student records via local OOU proxy API
+    // Note: $username and $password are no longer used; kept for compatibility.
+    function fetch_ug_students($page = 1, $pageSize = 50, $username = null, $password = null, $regnum = null)
     {
-        $baseUrl = 'https://portal.oouagoiwoye.edu.ng/api/get_users.php';
+        // Build base URL to local proxy (oou_student_api.php in web root)
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https://' : 'http://';
+        $host   = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
+        $dir    = rtrim(str_replace('\\', '/', dirname($_SERVER['PHP_SELF'])), '/');
+        if ($dir === '') {
+            $dir = '/';
+        }
+        $baseUrl = $scheme . $host . $dir . '/oou_student_api.php';
 
         $params = array(
-            'data'      => 'UG',
-            'page'      => (int) $page,
-            'page_size' => (int) $pageSize,
-            'username'  => $username,
-            'password'  => $password,
+            'type'  => 'UG',
+            'page'  => (int) $page,
+            'limit' => (int) $pageSize,
         );
 
         if (!empty($regnum)) {
@@ -29,8 +35,10 @@
         $ch = curl_init($url);
         curl_setopt_array($ch, array(
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_TIMEOUT        => 20,
+            CURLOPT_HTTPHEADER     => array(
+                'Authorization: my_secure_hospital_key',
+            ),
         ));
 
         $response = curl_exec($ch);
@@ -41,11 +49,12 @@
         curl_close($ch);
 
         $data = json_decode($response, true);
-        if (!is_array($data)) {
+        if (!is_array($data) || !isset($data['status']) || $data['status'] !== 'success' || !isset($data['data']) || !is_array($data['data'])) {
             return array();
         }
 
-        return $data;
+        // Return only the student list portion
+        return $data['data'];
     }
 
     // Defaults for pre-filled form values (from UG API)
@@ -72,27 +81,27 @@
             // Prefer an exact regnum match to the matric entered
             $stu = null;
             foreach ($students as $candidate) {
-                if (isset($candidate['regnum']) && strcasecmp(trim($candidate['regnum']), trim($lookup_matric)) === 0) {
+                if (isset($candidate['matric_no']) && strcasecmp(trim($candidate['matric_no']), trim($lookup_matric)) === 0) {
                     $stu = $candidate;
                     break;
                 }
             }
 
             if ($stu !== null) {
-                $pref_matric  = isset($stu['regnum']) ? $stu['regnum'] : $lookup_matric;
-                $pref_surn    = isset($stu['sname']) ? $stu['sname'] : '';
-                $pref_fname   = isset($stu['fname']) ? $stu['fname'] : '';
-                $pref_mname   = isset($stu['mname']) ? $stu['mname'] : '';
-                $pref_dept    = isset($stu['dept']) ? $stu['dept'] : '';
+                $pref_matric  = isset($stu['matric_no']) ? $stu['matric_no'] : $lookup_matric;
+                $pref_surn    = isset($stu['surname']) ? $stu['surname'] : '';
+                $pref_fname   = isset($stu['first_name']) ? $stu['first_name'] : '';
+                $pref_mname   = isset($stu['middle_name']) ? $stu['middle_name'] : '';
+                $pref_dept    = isset($stu['department']) ? $stu['department'] : '';
                 $pref_faculty = isset($stu['faculty']) ? $stu['faculty'] : '';
-                $pref_addr    = isset($stu['ad']) ? $stu['ad'] : '';
-                $pref_phone   = isset($stu['tel']) ? $stu['tel'] : '';
-                $pref_nok     = isset($stu['k1nam']) ? $stu['k1nam'] : '';
-                $pref_noknumber = isset($stu['k1tel']) ? $stu['k1tel'] : '';
+                $pref_addr    = isset($stu['address']) ? $stu['address'] : '';
+                $pref_phone   = isset($stu['phone']) ? $stu['phone'] : '';
+                $pref_nok     = isset($stu['nok']) ? $stu['nok'] : '';
+                $pref_noknumber = isset($stu['nok_phone']) ? $stu['nok_phone'] : '';
 
                 // Passport URL from UG portal (if provided by API)
-                if (!empty($stu['pass_url'])) {
-                    $pref_passport = $stu['pass_url'];
+                if (!empty($stu['passport_url'])) {
+                    $pref_passport = $stu['passport_url'];
                 } elseif (!empty($stu['pass']) && !empty($pref_matric)) {
                     // Fallback guess: base URL + matric number pattern, if needed in future
                     $pref_passport = rtrim($stu['pass'], '/') . '/passports/' . preg_replace('/[^A-Z0-9]/i', '', $pref_matric) . '.jpg';
@@ -231,7 +240,19 @@
                             <div class="col-12">
                                 <div class="card">
                                     <div class="card-body">
-                                       
+
+                                        <?php if(!empty($success)) { ?>
+                                            <div class="alert alert-success" role="alert">
+                                                <?php echo htmlspecialchars($success); ?>
+                                            </div>
+                                        <?php } ?>
+
+                                        <?php if(!empty($err)) { ?>
+                                            <div class="alert alert-danger" role="alert">
+                                                <?php echo htmlspecialchars($err); ?>
+                                            </div>
+                                        <?php } ?>
+
                                         <!-- Lookup from UG portal by matric number -->
                                         <form method="get" action="his_admin_student_individual.php" class="form-inline mb-3">
                                             <div class="form-group col-md-4">
