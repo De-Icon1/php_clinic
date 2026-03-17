@@ -58,13 +58,25 @@
     }
 
     // Helper: find a single student by matric by scanning multiple pages
-    function find_ug_student_by_matric($matric, $maxPages = 20, $pageSize = 100)
+    function find_ug_student_by_matric($matric, $maxPages = 200, $pageSize = 100)
     {
         $matricNorm = strtoupper(trim($matric));
 
+        // First try relying on regnum filter in the proxy (page 1 only)
+        $filtered = fetch_ug_students(1, $pageSize, null, null, $matric);
+        if (!empty($filtered)) {
+            foreach ($filtered as $candidate) {
+                if (!isset($candidate['matric_no'])) {
+                    continue;
+                }
+                if (strtoupper(trim($candidate['matric_no'])) === $matricNorm) {
+                    return $candidate;
+                }
+            }
+        }
+
+        // Fallback: walk through pages until we either find the student or hit the last page
         for ($page = 1; $page <= $maxPages; $page++) {
-            // We deliberately do NOT rely on regnum filtering upstream,
-            // because the external API may ignore that parameter.
             $students = fetch_ug_students($page, $pageSize);
 
             if (empty($students)) {
@@ -80,6 +92,11 @@
                 if (strtoupper(trim($candidate['matric_no'])) === $matricNorm) {
                     return $candidate;
                 }
+            }
+
+            // If this page returned fewer than pageSize records, it's the last page
+            if (count($students) < $pageSize) {
+                break;
             }
         }
 
