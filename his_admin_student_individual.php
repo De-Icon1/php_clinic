@@ -58,8 +58,9 @@
         return $data['data'];
     }
 
-    // Helper: find a single student by matric by scanning multiple pages
-    function find_ug_student_by_matric($matric, $maxPages = 200, $pageSize = 100)
+    // Helper: find a single student by matric by scanning a wide range of records
+    // Increased defaults to widen scan range as requested
+    function find_ug_student_by_matric($matric, $maxPages = 1000, $pageSize = 500)
     {
         $matricNorm = strtoupper(trim($matric));
 
