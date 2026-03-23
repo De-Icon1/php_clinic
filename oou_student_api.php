@@ -57,17 +57,20 @@ if ($limit > 100) {
 }
 
 // --- Build external API query ---
+// When a specific matric/regnum is requested, do not send page/limit
+// so the external API can return the full match without pagination.
 $queryParams = [
-    'data'      => $type,
-    'page'      => $page,
-    'page_size' => $limit,
-    'username'  => OOU_USERNAME,
-    'password'  => OOU_PASSWORD,
+    'data'     => $type,
+    'username' => OOU_USERNAME,
+    'password' => OOU_PASSWORD,
 ];
 
-// Pass through regnum filter if provided
+// Pass through regnum filter if provided; otherwise apply pagination
 if ($regnum !== '') {
     $queryParams['regnum'] = $regnum;
+} else {
+    $queryParams['page']      = $page;
+    $queryParams['page_size'] = $limit;
 }
 
 $query = http_build_query($queryParams);

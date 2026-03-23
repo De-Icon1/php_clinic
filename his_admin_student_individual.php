@@ -27,7 +27,8 @@
         );
 
         if (!empty($regnum)) {
-            $params['regnum'] = $regnum;
+            // Normalise matric/regnum before sending to proxy to avoid case issues
+            $params['regnum'] = strtoupper(trim($regnum));
         }
 
         $url = $baseUrl . '?' . http_build_query($params);
