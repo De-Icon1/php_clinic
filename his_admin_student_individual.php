@@ -187,6 +187,7 @@
             $nok=$_POST['nok'];
             $noknumber=$_POST['noknumber'];
              $mstatus=$_POST['mstatus'];
+            $gender = isset($_POST['gender']) ? $_POST['gender'] : null;
             $pics=$_FILES["pics"]["name"];
 
             // Ensure department/faculty strings fit DB column sizes (dept/faculty are VARCHAR(20))
@@ -200,9 +201,9 @@
 
                  move_uploaded_file($_FILES["pics"]["tmp_name"],"picture/".$_FILES["pics"]["name"]);
    
-            $query="insert into student(stcode,title,surname,firstname,middlename,matric_no,dept,faculty,reg_date,dob,age,address,phone,nok,nok_contact,marital_status,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            $query="insert into student(stcode,title,surname,firstname,middlename,matric_no,dept,faculty,reg_date,dob,age,gender,address,phone,nok,nok_contact,marital_status,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
             $stmt = $mysqli->prepare($query);
-            $rc=$stmt->bind_param('sssssssssssssssss',$pat_stcode, $pat_title,  $pat_surn, $pat_fname,  $pat_mname, $pat_matric, $pat_dept, $pat_faculty, $date, $pat_dob, $pat_age, $pat_addr, $pat_phone, $nok, $noknumber, $mstatus, $pics);
+            $rc=$stmt->bind_param('ssssssssssssssssss',$pat_stcode, $pat_title,  $pat_surn, $pat_fname,  $pat_mname, $pat_matric, $pat_dept, $pat_faculty, $date, $pat_dob, $pat_age,$gender, $pat_addr, $pat_phone, $nok, $noknumber, $mstatus, $pics);
             $stmt->execute();
             /*
             *Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
@@ -358,6 +359,17 @@
                                                 <div class="form-group col-md-6">
                                                     <label for="inputPassword4" class="col-form-label">Age</label>
                                                     <input required="required" type="text" name="age" class="form-control"  id="inputPassword4" placeholder="Patient`s Age" value="<?php echo htmlspecialchars($pref_age); ?>">
+                                                </div>
+                                            </div>
+
+                                            <div class="form-row">
+                                                <div class="form-group col-md-4">
+                                                    <label for="student_gender" class="col-form-label">Gender</label>
+                                                    <select id="student_gender" name="gender" class="form-control" required="required">
+                                                        <option value="">Choose</option>
+                                                        <option value="Male">Male</option>
+                                                        <option value="Female">Female</option>
+                                                    </select>
                                                 </div>
                                             </div>
 

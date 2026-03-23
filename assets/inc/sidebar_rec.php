@@ -7,7 +7,7 @@
 
                         <ul class="metismenu" id="side-menu">
 
-                            <li class="menu-title"><h5>Record Navigation</h5></li>
+                            <li class="menu-title"><h5>Health Info Mgt. Navigation</h5></li>
 
                             <li>
                                 <a href="record_dashboard.php">
@@ -25,7 +25,7 @@
                                 </a>
                                 <ul class="nav-second-level" aria-expanded="false">
                                     <li>
-                                        <a href="./his_admin_individual_patient.php">Individual Patient</a>
+                                        <a href="./his_admin_individual_patient.php">Non Staff Patient</a>
                                     </li>
                                     <li>
                                         <a href="./his_admin_student_individual.php">Student Patient</a>

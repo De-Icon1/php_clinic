@@ -17,6 +17,7 @@
             $nok=$_POST['nok'];
             $noknumber=$_POST['noknumber'];
              $mstatus=$_POST['mstatus'];
+            $gender = isset($_POST['gender']) ? $_POST['gender'] : null;
             $pics=$_FILES["pics"]["name"];
 
 //$dir="productimages";
@@ -25,9 +26,9 @@
 
                  move_uploaded_file($_FILES["pics"]["tmp_name"],"picture/".$_FILES["pics"]["name"]);
    
-			$query="insert into individual(surname,firstname,middlename,code,reg_date,dob,age,address,phone,nok,nok_contact,marrital,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?)";
-			$stmt = $mysqli->prepare($query);
-			$rc=$stmt->bind_param('sssssssssssss',$pat_surn,$pat_fname, $pat_mname,$pat_code,$date, $pat_dob, $pat_age, $pat_addr,$pat_phone, $nok, $noknumber,$mstatus,$pics);
+            $query="insert into individual(surname,firstname,middlename,code,reg_date,dob,age,gender,address,phone,nok,nok_contact,marrital,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            $stmt = $mysqli->prepare($query);
+            $rc=$stmt->bind_param('ssssssssssssssss',$pat_surn,$pat_fname, $pat_mname,$pat_code,$date, $pat_dob, $pat_age,$gender, $pat_addr,$pat_phone, $nok, $noknumber,$mstatus,$pics);
 			$stmt->execute();
 			/*
 			*Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
@@ -137,6 +138,17 @@
                                                 <div class="form-group col-md-6">
                                                     <label for="inputPassword4" class="col-form-label">Age</label>
                                                     <input required="required" type="text" name="age" class="form-control"  id="inputPassword4" placeholder="Patient`s Age">
+                                                </div>
+                                            </div>
+
+                                            <div class="form-row">
+                                                <div class="form-group col-md-4">
+                                                    <label for="gender" class="col-form-label">Gender</label>
+                                                    <select id="gender" name="gender" class="form-control" required="required">
+                                                        <option value="">Choose</option>
+                                                        <option value="Male">Male</option>
+                                                        <option value="Female">Female</option>
+                                                    </select>
                                                 </div>
                                             </div>
 

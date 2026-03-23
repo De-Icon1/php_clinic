@@ -16,7 +16,8 @@
             $pat_age = $_POST['age'];
             $nok=$_POST['nok'];
             $noknumber=$_POST['noknumber'];
-             $mstatus=$_POST['mstatus'];
+			 $mstatus=$_POST['mstatus'];
+			 $gender = isset($_POST['gender']) ? $_POST['gender'] : null;
             $pics=$_FILES["pics"]["name"];
 
 //$dir="productimages";
@@ -31,9 +32,9 @@
 
             // Note: ensure the column name for the ante-natal code matches your DB schema.
             // Many schemas use `pat_code` or `code`. Update the column name below if different.
-            $query="INSERT INTO antenatal (surname, firstname, middlename, acode, reg_date, dob, age, address, phone, nok, nok_contact, marital, picture) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            $query="INSERT INTO antenatal (surname, firstname, middlename, acode, reg_date, dob, age, gender, address, phone, nok, nok_contact, marital, picture) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
             $stmt = $mysqli->prepare($query);
-            $rc=$stmt->bind_param('sssssssssssss', $pat_surn, $pat_fname, $pat_mname, $pat_acode, $date, $pat_dob, $pat_age, $pat_addr, $pat_phone, $nok, $noknumber, $mstatus, $pics);
+            $rc=$stmt->bind_param('ssssssssssssssss', $pat_surn, $pat_fname, $pat_mname, $pat_acode, $date, $pat_dob, $pat_age, $gender, $pat_addr, $pat_phone, $nok, $noknumber, $mstatus, $pics);
 			$stmt->execute();
 			/*
 			*Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
@@ -143,6 +144,17 @@
                                                 <div class="form-group col-md-6">
                                                     <label for="inputPassword4" class="col-form-label">Age</label>
                                                     <input required="required" type="text" name="age" class="form-control"  id="inputPassword4" placeholder="Patient`s Age">
+                                                </div>
+                                            </div>
+
+                                            <div class="form-row">
+                                                <div class="form-group col-md-4">
+                                                    <label for="antenatal_gender" class="col-form-label">Gender</label>
+                                                    <select id="antenatal_gender" name="gender" class="form-control" required="required">
+                                                        <option value="">Choose</option>
+                                                        <option value="Male">Male</option>
+                                                        <option value="Female">Female</option>
+                                                    </select>
                                                 </div>
                                             </div>
 

@@ -20,6 +20,7 @@ $code=$_GET['code'];
             $pat_nok=$_POST['nok'];
             $pat_noknum=$_POST['noknumber'];
             $pat_add=$_POST['add'];
+        $gender = isset($_POST['gender']) ? $_POST['gender'] : null;
             $pat_pics=$_FILES["pics"]["name"];
 
             //$dir="productimages";
@@ -29,9 +30,9 @@ $code=$_GET['code'];
                  move_uploaded_file($_FILES["pics"]["tmp_name"],"picture/".$_FILES["pics"]["name"]);
             
             //sql to insert captured values
-            $query="insert into family_individual(fcode,surname,firstname,middlename,reg_date,code,dob,age,address,marital,phone,nok,nok_contact,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            $query="insert into family_individual(fcode,surname,firstname,middlename,reg_date,code,dob,age,gender,address,marital,phone,nok,nok_contact,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
             $stmt = $mysqli->prepare($query);
-            $rc=$stmt->bind_param('ssssssssssssss',$pat_fcode,$pat_surn,$pat_fname, $pat_mname,$date,$pat_code,$pat_dob,$pat_age,$pat_add,$pat_mstatus,$pat_phone,$pat_nok,$pat_noknum,$pat_pics);
+            $rc=$stmt->bind_param('ssssssssssssssss',$pat_fcode,$pat_surn,$pat_fname, $pat_mname,$date,$pat_code,$pat_dob,$pat_age,$gender,$pat_add,$pat_mstatus,$pat_phone,$pat_nok,$pat_noknum,$pat_pics);
             $stmt->execute();
             /*
             *Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
@@ -146,6 +147,17 @@ $code=$_GET['code'];
                                                 <div class="form-group col-md-6">
                                                     <label for="inputPassword4" class="col-form-label">Age</label>
                                                     <input required="required" type="text" name="age" class="form-control"  id="inputPassword4" placeholder="Patient`s Age">
+                                                </div>
+                                            </div>
+
+                                            <div class="form-row">
+                                                <div class="form-group col-md-4">
+                                                    <label for="family_gender" class="col-form-label">Gender</label>
+                                                    <select id="family_gender" name="gender" class="form-control" required="required">
+                                                        <option value="">Choose</option>
+                                                        <option value="Male">Male</option>
+                                                        <option value="Female">Female</option>
+                                                    </select>
                                                 </div>
                                             </div>
 
