@@ -87,30 +87,39 @@ if (!empty($allowedIps)) {
 }
 
 // --- API key protection ---
-$headers = function_exists('getallheaders') ? getallheaders() : [];
+// For internal calls originating from the same server (cURL from HMS PHP),
+// we allow access without requiring the Authorization header. This avoids
+// issues on hosts that strip custom Authorization headers, while still
+// protecting against direct external access (blocked by IP whitelist).
+$isInternal = !empty($_SERVER['REMOTE_ADDR']) && !empty($_SERVER['SERVER_ADDR'])
+    && $_SERVER['REMOTE_ADDR'] === $_SERVER['SERVER_ADDR'];
 
-$authHeader = '';
-if (isset($headers['Authorization'])) {
-    $authHeader = $headers['Authorization'];
-} elseif (isset($headers['authorization'])) { // some servers normalise header names
-    $authHeader = $headers['authorization'];
-}
+if (!$isInternal) {
+    $headers = function_exists('getallheaders') ? getallheaders() : [];
 
-// Prefer environment variable if set; fall back to constant
-$expectedKey = getenv('HMS_STUDENT_API_KEY');
-if ($expectedKey === false || $expectedKey === '') {
-    $expectedKey = API_KEY;
-}
+    $authHeader = '';
+    if (isset($headers['Authorization'])) {
+        $authHeader = $headers['Authorization'];
+    } elseif (isset($headers['authorization'])) { // some servers normalise header names
+        $authHeader = $headers['authorization'];
+    }
 
-$providedKey = hms_extract_api_key($authHeader);
+    // Prefer environment variable if set; fall back to constant
+    $expectedKey = getenv('HMS_STUDENT_API_KEY');
+    if ($expectedKey === false || $expectedKey === '') {
+        $expectedKey = API_KEY;
+    }
 
-if ($providedKey === '' || $providedKey !== $expectedKey) {
-    http_response_code(401);
-    echo json_encode([
-        'status'  => 'error',
-        'message' => 'Unauthorized',
-    ]);
-    exit;
+    $providedKey = hms_extract_api_key($authHeader);
+
+    if ($providedKey === '' || $providedKey !== $expectedKey) {
+        http_response_code(401);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Unauthorized',
+        ]);
+        exit;
+    }
 }
 
 // Only allow GET requests to this endpoint

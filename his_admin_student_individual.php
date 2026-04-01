@@ -162,13 +162,24 @@
                 $pref_title = 'Miss';
             }
 
-            // DOB is in format dd/mm/yyyy from API; convert to yyyy-mm-dd for HTML date
+            // DOB conversion: handle multiple possible formats from the UG API
             if (!empty($stu['dob'])) {
-                $dob = DateTime::createFromFormat('d/m/Y', $stu['dob']);
-                if ($dob instanceof DateTime) {
-                    $pref_dob = $dob->format('Y-m-d');
-                    $now  = new DateTime();
-                    $diff = $now->diff($dob);
+                $rawDob  = trim($stu['dob']);
+                $dobObj  = false;
+                $formats = array('d/m/Y', 'd-m-Y', 'Y-m-d');
+
+                foreach ($formats as $fmt) {
+                    $tmp = DateTime::createFromFormat($fmt, $rawDob);
+                    if ($tmp instanceof DateTime) {
+                        $dobObj = $tmp;
+                        break;
+                    }
+                }
+
+                if ($dobObj instanceof DateTime) {
+                    $pref_dob = $dobObj->format('Y-m-d');
+                    $now      = new DateTime();
+                    $diff     = $now->diff($dobObj);
                     $pref_age = $diff->y;
                 }
             }
