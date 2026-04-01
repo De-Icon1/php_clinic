@@ -133,7 +133,18 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 // --- Input parameters ---
-$type  = isset($_GET['type']) ? trim($_GET['type']) : 'UG';
+// Supported student modes: UG, PG, CCED. If no specific type
+// is provided (or "ALL" is used), the proxy will aggregate
+// data across all three modes.
+$allowedTypes = ['UG', 'PG', 'CCED'];
+$rawType = isset($_GET['type']) ? strtoupper(trim($_GET['type'])) : 'ALL';
+if ($rawType === '' || $rawType === 'ALL') {
+    $type = 'ALL';
+} elseif (in_array($rawType, $allowedTypes, true)) {
+    $type = $rawType;
+} else {
+    $type = 'ALL';
+}
 $page  = isset($_GET['page']) ? (int) $_GET['page'] : 1;
 $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
 $regnum = isset($_GET['regnum']) ? trim($_GET['regnum']) : '';
@@ -149,54 +160,104 @@ if ($limit > 100) {
     $limit = 100;
 }
 
-// --- Build external API query ---
-// When a specific matric/regnum is requested, do not send page/limit
-// so the external API can return the full match without pagination.
-$queryParams = [
-    'data'     => $type,
-    'username' => OOU_USERNAME,
-    'password' => OOU_PASSWORD,
-];
+// --- Helper to fetch from external API for a single mode ---
+function oou_fetch_mode($mode, $page, $limit, $regnum)
+{
+    // When a specific matric/regnum is requested, do not send page/limit
+    // so the external API can return the full match without pagination.
+    $queryParams = [
+        'data'     => $mode,
+        'username' => OOU_USERNAME,
+        'password' => OOU_PASSWORD,
+    ];
 
-// Pass through regnum filter if provided; otherwise apply pagination
-if ($regnum !== '') {
-    $queryParams['regnum'] = $regnum;
+    if ($regnum !== '') {
+        $queryParams['regnum'] = $regnum;
+    } else {
+        $queryParams['page']      = $page;
+        $queryParams['page_size'] = $limit;
+    }
+
+    $query = http_build_query($queryParams);
+    $url   = OOU_API_URL . '?' . $query;
+
+    $context = stream_context_create([
+        'http' => [
+            'method'  => 'GET',
+            'timeout' => 20,
+            'header'  => "User-Agent: HMS-OOU-Proxy\r\n",
+        ],
+    ]);
+
+    $response = @file_get_contents($url, false, $context);
+
+    if ($response === false) {
+        return ['error' => 'Failed to reach external OOU API'];
+    }
+
+    $data = json_decode($response, true);
+    if (!is_array($data)) {
+        return ['error' => 'Invalid response from external OOU API'];
+    }
+
+    return ['data' => $data];
+}
+
+// --- Fetch data from external API (one or all types) ---
+$allRawStudents = [];
+
+if ($type === 'ALL') {
+    // Aggregate across all supported modes; when regnum is provided,
+    // stop as soon as we find a match in any mode.
+    foreach ($allowedTypes as $mode) {
+        $result = oou_fetch_mode($mode, $page, $limit, $regnum);
+        if (isset($result['error'])) {
+            http_response_code(502);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => $result['error'],
+            ]);
+            exit;
+        }
+        $data = $result['data'];
+
+        $rawForMode = [];
+        if (isset($data['data']) && is_array($data['data'])) {
+            $rawForMode = $data['data'];
+        } elseif (array_keys($data) === range(0, count($data) - 1)) {
+            $rawForMode = $data;
+        } elseif (isset($data['regnum']) || isset($data['sname']) || isset($data['fname'])) {
+            $rawForMode = [$data];
+        }
+
+        if ($regnum !== '') {
+            if (!empty($rawForMode)) {
+                $allRawStudents = $rawForMode;
+                break;
+            }
+        } else {
+            $allRawStudents = array_merge($allRawStudents, $rawForMode);
+        }
+    }
 } else {
-    $queryParams['page']      = $page;
-    $queryParams['page_size'] = $limit;
-}
+    $result = oou_fetch_mode($type, $page, $limit, $regnum);
+    if (isset($result['error'])) {
+        http_response_code(502);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => $result['error'],
+        ]);
+        exit;
+    }
+    $data = $result['data'];
 
-$query = http_build_query($queryParams);
-$url   = OOU_API_URL . '?' . $query;
-
-// --- Fetch data from external API ---
-$context = stream_context_create([
-    'http' => [
-        'method'  => 'GET',
-        'timeout' => 20,
-        'header'  => "User-Agent: HMS-OOU-Proxy\r\n",
-    ],
-]);
-
-$response = @file_get_contents($url, false, $context);
-
-if ($response === false) {
-    http_response_code(502);
-    echo json_encode([
-        'status'  => 'error',
-        'message' => 'Failed to reach external OOU API',
-    ]);
-    exit;
-}
-
-$data = json_decode($response, true);
-if (!is_array($data)) {
-    http_response_code(502);
-    echo json_encode([
-        'status'  => 'error',
-        'message' => 'Invalid response from external OOU API',
-    ]);
-    exit;
+    if (isset($data['data']) && is_array($data['data'])) {
+        $allRawStudents = $data['data'];
+    } elseif (array_keys($data) === range(0, count($data) - 1)) {
+        $allRawStudents = $data;
+    } elseif (isset($data['regnum']) || isset($data['sname']) || isset($data['fname'])) {
+        $allRawStudents = [$data];
+    }
 }
 
 // External API may either return:
@@ -204,16 +265,7 @@ if (!is_array($data)) {
 //  - a single student object:            { ... }
 //  - or wrap them under a "data" key:    { "data": [ ... ] }
 // Handle all forms.
-$rawStudents = [];
-if (isset($data['data']) && is_array($data['data'])) {
-    $rawStudents = $data['data'];
-} elseif (array_keys($data) === range(0, count($data) - 1)) {
-    // numeric keys -> treat as list
-    $rawStudents = $data;
-} elseif (isset($data['regnum']) || isset($data['sname']) || isset($data['fname'])) {
-    // Looks like a single student object
-    $rawStudents = [$data];
-}
+$rawStudents = $allRawStudents;
 
 // --- Clean & restructure data ---
 $students = [];
@@ -247,7 +299,8 @@ foreach ($rawStudents as $student) {
         'address'      => isset($student['ad']) ? $student['ad'] : null,
         'nok'          => isset($student['k1nam']) ? $student['k1nam'] : null,
         'nok_phone'    => isset($student['k1tel']) ? $student['k1tel'] : null,
-        'passport_url' => isset($student['pass_url']) ? $student['pass_url'] : null,
+        // Portal may use either "pass_url" or "pass" for the passport field
+        'passport_url' => isset($student['pass_url']) ? $student['pass_url'] : (isset($student['pass']) ? $student['pass'] : null),
     ];
 }
 

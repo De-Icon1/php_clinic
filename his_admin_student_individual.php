@@ -30,7 +30,8 @@
         $baseUrl = $scheme . $host . $dir . '/oou_student_api.php';
 
         $params = array(
-            'type'  => 'UG',
+            // Use ALL so the proxy aggregates UG, PG and CCED
+            'type'  => 'ALL',
             'page'  => (int) $page,
             'limit' => (int) $pageSize,
         );
@@ -148,10 +149,22 @@
             $pref_noknumber = isset($stu['nok_phone']) ? $stu['nok_phone'] : '';
 
             // Passport URL from UG portal (if provided by API).
-            // Use whatever the API returns directly so we don't
-            // guess the path; the portal controls the final URL.
+            // If the API gives a direct image URL, use it.
+            // If it only gives a base URL (no extension), try to
+            // construct a likely passport path from the matric.
             if (!empty($stu['passport_url'])) {
-                $pref_passport = trim($stu['passport_url']);
+                $basePassUrl = trim($stu['passport_url']);
+                $path        = parse_url($basePassUrl, PHP_URL_PATH);
+
+                if ($path && preg_match('/\.(jpg|jpeg|png|gif)$/i', $path)) {
+                    // Already looks like an image
+                    $pref_passport = $basePassUrl;
+                } else {
+                    // Build from matric/regnum e.g. SCI25261200.jpg
+                    $regSource = isset($stu['matric_no']) ? $stu['matric_no'] : (isset($stu['matric']) ? $stu['matric'] : (isset($stu['regnum']) ? $stu['regnum'] : $lookup_matric));
+                    $cleanMat  = preg_replace('/[^A-Z0-9]/i', '', strtoupper($regSource));
+                    $pref_passport = rtrim($basePassUrl, '/') . '/passports/' . $cleanMat . '.jpg';
+                }
             }
 
             // Infer title from sex
