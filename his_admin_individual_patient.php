@@ -1,7 +1,7 @@
-<!--Server side code to handle  Patient Registration-->
 <?php
-	session_start();
-	include('assets/inc/config.php');
+// Server side code to handle Patient Registration
+    session_start();
+    include('assets/inc/config.php');
 		if(isset($_POST['add_patient']))
 		{
             

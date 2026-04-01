@@ -7,9 +7,18 @@
     $err = '';
     $success = '';
 
+    // Configuration for UG lookup scanning: adjust to balance
+    // completeness vs. performance when walking the remote API.
+    if (!defined('UG_FIND_MAX_PAGES')) {
+        define('UG_FIND_MAX_PAGES', 200);   // was 1000
+    }
+    if (!defined('UG_FIND_PAGE_SIZE')) {
+        define('UG_FIND_PAGE_SIZE', 200);   // was 500
+    }
+
     // Helper: fetch student records via local OOU proxy API (single page)
     // Note: $username and $password are no longer used; kept for compatibility.
-    function fetch_ug_students($page = 1, $pageSize = 50, $username = null, $password = null, $regnum = null)
+    function fetch_ug_students($page = 1, $pageSize = UG_FIND_PAGE_SIZE, $username = null, $password = null, $regnum = null)
     {
         // Build base URL to local proxy (oou_student_api.php in web root)
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https://' : 'http://';
@@ -58,9 +67,9 @@
         return $data['data'];
     }
 
-    // Helper: find a single student by matric by scanning a wide range of records
-    // Increased defaults to widen scan range as requested
-    function find_ug_student_by_matric($matric, $maxPages = 1000, $pageSize = 500)
+    // Helper: find a single student by matric by scanning a range of records
+    // Defaults now controlled by UG_FIND_MAX_PAGES / UG_FIND_PAGE_SIZE
+    function find_ug_student_by_matric($matric, $maxPages = UG_FIND_MAX_PAGES, $pageSize = UG_FIND_PAGE_SIZE)
     {
         $matricNorm = strtoupper(trim($matric));
 
@@ -138,12 +147,11 @@
             $pref_nok     = isset($stu['nok']) ? $stu['nok'] : '';
             $pref_noknumber = isset($stu['nok_phone']) ? $stu['nok_phone'] : '';
 
-            // Passport URL from UG portal (if provided by API)
+            // Passport URL from UG portal (if provided by API).
+            // Use whatever the API returns directly so we don't
+            // guess the path; the portal controls the final URL.
             if (!empty($stu['passport_url'])) {
-                $pref_passport = $stu['passport_url'];
-            } elseif (!empty($stu['pass']) && !empty($pref_matric)) {
-                // Fallback guess: base URL + matric number pattern, if needed in future
-                $pref_passport = rtrim($stu['pass'], '/') . '/passports/' . preg_replace('/[^A-Z0-9]/i', '', $pref_matric) . '.jpg';
+                $pref_passport = trim($stu['passport_url']);
             }
 
             // Infer title from sex
@@ -514,7 +522,7 @@
                                                     <td><?php echo $row->marital_status;?></td>
                                                     <td><?php echo $row->reg_date;?></td>
                                                     <td><?php echo $row->phone;?></td>
-                                                    <td><?php echo $row->address;?></td
+                                                    <td><?php echo $row->address;?></td>
                                                     
                                                     <td><a href="his_admin_student_individual.php?code=<?php echo $row->stcode;?>" class="badge badge-success"><i class="far fa-eye "></i> View</a></td>
                                                 </tr>

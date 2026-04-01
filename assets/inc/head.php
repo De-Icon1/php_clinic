@@ -27,7 +27,7 @@
        <script src="assets/js/swal.js"></script>
        
         <!--Inject SWAL-->
-        <?php if(isset($success)) {?>
+        <?php if(!empty($success)) {?>
         <!--This code for injecting an alert-->
                 <script>
                             setTimeout(function () 
@@ -39,7 +39,7 @@
 
         <?php } ?>
 
-        <?php if(isset($err)) {?>
+        <?php if(!empty($err)) {?>
         <!--This code for injecting an alert-->
                 <script>
                             setTimeout(function () 

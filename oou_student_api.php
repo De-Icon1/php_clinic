@@ -15,12 +15,78 @@ define('OOU_PASSWORD', 'deicon');
 
 // Shared secret between HMS and this proxy
 // Change this to a strong, private value on your server
+// Recommended: set environment variable HMS_STUDENT_API_KEY in production.
 define('API_KEY', 'my_secure_hospital_key');
+
+// Optional: limit which IPs can call this proxy.
+// Add your web server / application server IPs here in production.
+// Leave array empty to disable IP whitelisting.
+define('ALLOWED_IPS', [
+    '127.0.0.1',
+    '::1',
+]);
 
 // Optionally pull in app config (DB, sessions, etc.)
 // require_once __DIR__ . '/assets/inc/config.php';
 
-// --- Simple API key protection ---
+// --- Helpers for security ---
+function hms_get_client_ip()
+{
+    $keys = [
+        'HTTP_X_FORWARDED_FOR',
+        'HTTP_CLIENT_IP',
+        'REMOTE_ADDR',
+    ];
+
+    foreach ($keys as $key) {
+        if (!empty($_SERVER[$key])) {
+            // X_FORWARDED_FOR can contain a comma-separated list; take first
+            $ipList = explode(',', $_SERVER[$key]);
+            $ip = trim($ipList[0]);
+            if ($ip !== '') {
+                return $ip;
+            }
+        }
+    }
+
+    return '0.0.0.0';
+}
+
+function hms_extract_api_key($authHeader)
+{
+    $authHeader = trim($authHeader);
+    if ($authHeader === '') {
+        return '';
+    }
+
+    // Support "Authorization: Bearer <key>" as well as raw key
+    if (stripos($authHeader, 'Bearer ') === 0) {
+        return trim(substr($authHeader, 7));
+    }
+
+    return $authHeader;
+}
+
+// --- Enforce IP whitelist (if configured) ---
+$clientIp = hms_get_client_ip();
+$allowedIps = is_array(ALLOWED_IPS) ? ALLOWED_IPS : [];
+// Also trust the server's own IP address so local cURL
+// calls from the same host are not blocked in production.
+if (!empty($_SERVER['SERVER_ADDR'])) {
+    $allowedIps[] = $_SERVER['SERVER_ADDR'];
+}
+if (!empty($allowedIps)) {
+    if (!in_array($clientIp, $allowedIps, true)) {
+        http_response_code(403);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Forbidden',
+        ]);
+        exit;
+    }
+}
+
+// --- API key protection ---
 $headers = function_exists('getallheaders') ? getallheaders() : [];
 
 $authHeader = '';
@@ -30,11 +96,29 @@ if (isset($headers['Authorization'])) {
     $authHeader = $headers['authorization'];
 }
 
-if ($authHeader !== API_KEY) {
+// Prefer environment variable if set; fall back to constant
+$expectedKey = getenv('HMS_STUDENT_API_KEY');
+if ($expectedKey === false || $expectedKey === '') {
+    $expectedKey = API_KEY;
+}
+
+$providedKey = hms_extract_api_key($authHeader);
+
+if ($providedKey === '' || $providedKey !== $expectedKey) {
     http_response_code(401);
     echo json_encode([
         'status'  => 'error',
         'message' => 'Unauthorized',
+    ]);
+    exit;
+}
+
+// Only allow GET requests to this endpoint
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] !== 'GET') {
+    http_response_code(405);
+    echo json_encode([
+        'status'  => 'error',
+        'message' => 'Method Not Allowed',
     ]);
     exit;
 }
@@ -106,14 +190,20 @@ if (!is_array($data)) {
     exit;
 }
 
-// External API may either return an array of students directly
-// or wrap them under a "data" key; handle both forms.
+// External API may either return:
+//  - an array of students directly:      [ { ... }, { ... } ]
+//  - a single student object:            { ... }
+//  - or wrap them under a "data" key:    { "data": [ ... ] }
+// Handle all forms.
 $rawStudents = [];
 if (isset($data['data']) && is_array($data['data'])) {
     $rawStudents = $data['data'];
 } elseif (array_keys($data) === range(0, count($data) - 1)) {
     // numeric keys -> treat as list
     $rawStudents = $data;
+} elseif (isset($data['regnum']) || isset($data['sname']) || isset($data['fname'])) {
+    // Looks like a single student object
+    $rawStudents = [$data];
 }
 
 // --- Clean & restructure data ---
