@@ -18,6 +18,8 @@
         //$cnt=1;
         while($row=$res->fetch_object())
         {
+        	    $isAdmin = (isset($row->doc_dept) && strtolower($row->doc_dept) === 'administrator');
+        	    $isHod   = !empty($row->is_hod);
     ?>
     <div class="navbar-custom">
         <ul class="list-unstyled topnav-menu float-right mb-0">
@@ -61,6 +63,13 @@
                         <i class="fas fa-user-tag"></i>
                         <span>Update Account</span>
                     </a>-->
+
+                    <?php if ($isAdmin || $isHod): ?>
+                    <a href="admin_dashboard.php" class="dropdown-item notify-item">
+                        <i class="mdi mdi-view-dashboard"></i>
+                        <span>Admin Dashboard</span>
+                    </a>
+                    <?php endif; ?>
 
 
                     <div class="dropdown-divider"></div>

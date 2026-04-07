@@ -55,6 +55,53 @@
                                     <?php if (!empty($_SESSION['working_location'])): ?>
                                         <p class="text-muted mb-0">Current Working Location: <strong><?php echo htmlspecialchars($_SESSION['working_location']); ?></strong></p>
                                     <?php endif; ?>
+
+                                    <?php
+                                        // For Heads of Department, provide a quick way back to
+                                        // their usual departmental dashboard.
+                                        $isHod   = !empty($_SESSION['is_hod']);
+                                        $dept    = isset($_SESSION['doc_dept']) ? $_SESSION['doc_dept'] : '';
+                                        $backUrl = '';
+
+                                        if ($isHod && $dept !== 'Administrator') {
+                                            switch ($dept) {
+                                                case 'Records':
+                                                    $backUrl = 'record_dashboard.php';
+                                                    break;
+                                                case 'Nursing':
+                                                    $backUrl = 'nursing_dashboard.php';
+                                                    break;
+                                                case 'Cashier':
+                                                    $backUrl = 'cashier_dashboard.php';
+                                                    break;
+                                                case 'Pharmacy':
+                                                    $backUrl = 'pharmacy_dashboard.php';
+                                                    break;
+                                                case 'Scan':
+                                                    $backUrl = 'scan_dashboard.php';
+                                                    break;
+                                                case 'Laboratory':
+                                                    $backUrl = 'Lab_dashboard.php';
+                                                    break;
+                                                case 'Doctor':
+                                                    $backUrl = 'doc/doctor_dashboard.php';
+                                                    break;
+                                                case 'Vice Chancellor':
+                                                    $backUrl = 'vc_dashboard.php';
+                                                    break;
+                                                case 'Radiology':
+                                                    $backUrl = 'radiology_dashboard.php';
+                                                    break;
+                                            }
+                                        }
+                                    ?>
+                                    <?php if (!empty($backUrl)): ?>
+                                        <div class="mt-2">
+                                            <a href="<?php echo $backUrl; ?>" class="btn btn-sm btn-outline-primary">
+                                                Back to <?php echo htmlspecialchars($dept); ?> Dashboard
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>     
