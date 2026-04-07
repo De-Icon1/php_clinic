@@ -39,8 +39,10 @@ function fetch_all_stmt($stmt){
                 // Normalize input for more reliable matches on different servers
                 $search_trim = trim($searching);
                 $search_up = strtoupper($search_trim);
+                $search_low = strtolower($search_trim);
                 $like = "%".$search_trim."%";
                 $like_up = "%".$search_up."%";
+                $like_low = "%".$search_low."%";
 
                 // If input already looks like a code with a known prefix, keep original behaviour
                 if(strpos($search_up, 'IND') !== false || strpos($search_up, 'F') !== false || strpos($search_up, 'ST') !== false || strpos($search_up, 'S') !== false || strpos($search_up, 'H') !== false || strpos($search_up, 'A') !== false) {

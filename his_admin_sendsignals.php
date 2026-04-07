@@ -141,7 +141,7 @@ elseif (strpos($ind, 'H') !== false) {
             $phone=$row->phone;
             $cate="HMO CARD";
             $nok=isset($row->nok) ? $row->nok : '';
-            $nokph=isset($row->nok_phone) ? $row->nok_phone : '';
+            $nokph=isset($row->nok_contact) ? $row->nok_contact : '';
             $dob=isset($row->dob) ? $row->dob : '';
             $date=isset($row->reg_date) ? $row->reg_date : '';
             $pic=isset($row->picture) ? $row->picture : '';
@@ -165,7 +165,7 @@ elseif (strpos($ind, 'A') !== false) {
             $phone=$row->phone;
             $cate="ANTENATAL CARD";
             $nok=isset($row->nok) ? $row->nok : '';
-            $nokph=isset($row->nok_phone) ? $row->nok_phone : '';
+            $nokph=isset($row->nok_contact) ? $row->nok_contact : '';
             $dob=isset($row->dob) ? $row->dob : '';
             $date=isset($row->reg_date) ? $row->reg_date : '';
             $pic=isset($row->picture) ? $row->picture : '';
