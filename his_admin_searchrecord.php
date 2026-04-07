@@ -1,7 +1,9 @@
 <!--Server side code to handle  Patient Registration-->
 <?php
-	session_start();
-	include('assets/inc/config.php');
+    // Start output buffering early to avoid "headers already sent" issues on some servers
+    if (!ob_get_level()) ob_start();
+    if (session_status() == PHP_SESSION_NONE) session_start();
+    include('assets/inc/config.php');
 
 // Helper: fetch all rows from a prepared statement (works without mysqlnd)
 function fetch_all_stmt($stmt){
@@ -34,20 +36,27 @@ function fetch_all_stmt($stmt){
             $searching = isset($_POST['Searching']) ? trim($_POST['Searching']) : '';
 
             if($searching){
-                $search = $searching;
+                // Normalize input for more reliable matches on different servers
+                $search_trim = trim($searching);
+                $search_up = strtoupper($search_trim);
+                $like = "%".$search_trim."%";
+                $like_up = "%".$search_up."%";
+
                 // If input already looks like a code with a known prefix, keep original behaviour
-                if(strpos($search, 'IND') !== false || strpos($search, 'F') !== false || strpos($search, 'ST') !== false || strpos($search, 'S') !== false || strpos($search, 'H') !== false || strpos($search, 'A') !== false) {
-                    echo "<script>location='his_admin_sendsignals.php?id=$search'</script>";
+                if(strpos($search_up, 'IND') !== false || strpos($search_up, 'F') !== false || strpos($search_up, 'ST') !== false || strpos($search_up, 'S') !== false || strpos($search_up, 'H') !== false || strpos($search_up, 'A') !== false) {
+                    // Use the original (trimmed) value in redirect to preserve formatting if needed
+                    $redir = $search_trim;
+                    echo "<script>location='his_admin_sendsignals.php?id=$redir'</script>";
                     exit;
                 }
 
                 $results = array();
-                $like = "%".$search."%";
 
-                // Search students (by STcode or surname or code-like match)
+                // Search students (by STcode or surname or matric_no)
                 $stmt = $mysqli->prepare("SELECT STcode AS code, CONCAT(surname,' ',firstname) AS name, 'STUDENT' AS type FROM student WHERE STcode = ? OR STcode LIKE ? OR LOWER(surname) = LOWER(?) OR LOWER(surname) LIKE LOWER(?) OR matric_no = ? OR LOWER(matric_no) LIKE LOWER(?) LIMIT 10");
                 if($stmt){
-                    $stmt->bind_param('ssssss', $search, $like, $search, $like, $search, $like);
+                    // bind order: STcode exact, STcode like, surname exact, surname like, matric exact, matric like
+                    $stmt->bind_param('ssssss', $search_up, $like_up, $search_trim, $like, $search_up, $like_up);
                     $stmt->execute();
                     $rows = fetch_all_stmt($stmt);
                     foreach($rows as $r){
@@ -56,10 +65,10 @@ function fetch_all_stmt($stmt){
                     $stmt->close();
                 }
 
-                // Search staff
+                // Search staff (Scode, staff_no, surname)
                 $stmt = $mysqli->prepare("SELECT Scode AS code, CONCAT(surname,' ',firstname) AS name, 'STAFF' AS type FROM staff WHERE Scode = ? OR Scode LIKE ? OR LOWER(surname) = LOWER(?) OR LOWER(surname) LIKE LOWER(?) OR staff_no = ? OR LOWER(staff_no) LIKE LOWER(?) LIMIT 10");
                 if($stmt){
-                    $stmt->bind_param('ssssss', $search, $like, $search, $like, $search, $like);
+                    $stmt->bind_param('ssssss', $search_up, $like_up, $search_trim, $like, $search_up, $like_up);
                     $stmt->execute();
                     $rows = fetch_all_stmt($stmt);
                     foreach($rows as $r){
@@ -71,7 +80,7 @@ function fetch_all_stmt($stmt){
                 // Search individual (general patients) by code or surname
                 $stmt = $mysqli->prepare("SELECT code AS code, CONCAT(surname,' ',firstname) AS name, 'INDIVIDUAL' AS type FROM individual WHERE code = ? OR LOWER(surname) = LOWER(?) OR LOWER(surname) LIKE LOWER(?) LIMIT 10");
                 if($stmt){
-                    $stmt->bind_param('sss', $search, $search, $like);
+                    $stmt->bind_param('sss', $search_up, $search_trim, $like);
                     $stmt->execute();
                     $rows = fetch_all_stmt($stmt);
                     foreach($rows as $r){

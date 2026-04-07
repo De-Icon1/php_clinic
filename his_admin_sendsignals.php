@@ -1,8 +1,10 @@
 <!--Server side code to handle  Patient Registration-->
 <?php
-	session_start();
-	include('assets/inc/config.php');
-     $ind=isset($_GET['id']) ? $_GET['id'] : null;
+    // Start output buffering early to avoid "headers already sent" issues on some servers
+    if (!ob_get_level()) ob_start();
+    if (session_status() == PHP_SESSION_NONE) session_start();
+    include('assets/inc/config.php');
+    $ind=isset($_GET['id']) ? $_GET['id'] : null;
 
 // Helper: fetch one row from a prepared statement in a mysqlnd-safe way.
 function fetch_one_stmt($stmt){
