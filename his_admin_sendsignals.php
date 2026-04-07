@@ -12,16 +12,20 @@
     $res=$stmt->get_result();
     $cnt=1;
     $row=$res->fetch_object();
-    $surn=$row->surname;
-    $firstname=$row->firstname;
-    $mname=$row->middlename;
-    $phone=$row->phone;
-    $cate="INDIVIDUAL CARD";
-    $nok=$row->nok;
-    $nokph=$row->nok_contact;
-     $dob=$row->dob;
-    $date=$row->reg_date;
-    $pic=$row->picture;
+    if($row){
+        $surn=$row->surname;
+        $firstname=$row->firstname;
+        $mname=$row->middlename;
+        $phone=$row->phone;
+        $cate="INDIVIDUAL CARD";
+        $nok=$row->nok;
+        $nokph=$row->nok_contact;
+        $dob=$row->dob;
+        $date=$row->reg_date;
+        $pic=$row->picture;
+    } else {
+        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    }
 }
 elseif (strpos($ind, 'F') !== false) {
     $ret="SELECT * FROM family_individual where code='$ind'"; 
@@ -30,16 +34,20 @@ elseif (strpos($ind, 'F') !== false) {
     $res=$stmt->get_result();
     $cnt=1;
     $row=$res->fetch_object();
-    $surn=$row->surname;
-    $firstname=$row->firstname;
-    $mname=$row->middlename;
-     $cate="FAMILY CARD";
-    $phone=$row->phone;
-    $nok=$row->nok;
-    $nokph=$row->nok_contact;
-    $dob=$row->dob;
-    $date=$row->reg_date;
-    $pic=$row->picture;
+    if($row){
+        $surn=$row->surname;
+        $firstname=$row->firstname;
+        $mname=$row->middlename;
+        $cate="FAMILY CARD";
+        $phone=$row->phone;
+        $nok=$row->nok;
+        $nokph=$row->nok_contact;
+        $dob=$row->dob;
+        $date=$row->reg_date;
+        $pic=$row->picture;
+    } else {
+        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    }
 }
 elseif (strpos($ind, 'ST') !== false) {
     $ret="SELECT * FROM student where STcode='$ind'"; 
@@ -48,16 +56,20 @@ elseif (strpos($ind, 'ST') !== false) {
     $res=$stmt->get_result();
     $cnt=1;
     $row=$res->fetch_object();
-    $surn=$row->surname;
-    $firstname=$row->firstname;
-    $mname=$row->middlename;
-     $cate="STUDENT CARD";
-    $phone=$row->phone;
-    $nok=$row->nok;
-    $nokph=$row->nok_contact;
-    $dob=$row->dob;
-    $date=$row->reg_date;
-    $pic=$row->picture;
+    if($row){
+        $surn=$row->surname;
+        $firstname=$row->firstname;
+        $mname=$row->middlename;
+        $cate="STUDENT CARD";
+        $phone=$row->phone;
+        $nok=$row->nok;
+        $nokph=$row->nok_contact;
+        $dob=$row->dob;
+        $date=$row->reg_date;
+        $pic=$row->picture;
+    } else {
+        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    }
 }
 elseif (strpos($ind, 'S') !== false) {
     $ret="SELECT * FROM staff where Scode='$ind'"; 
@@ -66,16 +78,20 @@ elseif (strpos($ind, 'S') !== false) {
     $res=$stmt->get_result();
     $cnt=1;
     $row=$res->fetch_object();
-    $surn=$row->surname;
-    $firstname=$row->firstname;
-     $cate="STAFF CARD";
-    $mname=$row->middlename;
-    $phone=$row->phone;
-    $nok=$row->nok;
-    $nokph=$row->nok_contact;
-    $dob=$row->dob;
-    $date=$row->reg_date;
-    $pic=$row->picture;
+    if($row){
+        $surn=$row->surname;
+        $firstname=$row->firstname;
+        $cate="STAFF CARD";
+        $mname=$row->middlename;
+        $phone=$row->phone;
+        $nok=$row->nok;
+        $nokph=$row->nok_contact;
+        $dob=$row->dob;
+        $date=$row->reg_date;
+        $pic=$row->picture;
+    } else {
+        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    }
 }
 elseif (strpos($ind, 'H') !== false) {
     $ret="SELECT * FROM hmocompany_individual where code='$ind'"; 
@@ -84,16 +100,20 @@ elseif (strpos($ind, 'H') !== false) {
     $res=$stmt->get_result();
     $cnt=1;
     $row=$res->fetch_object();
-    $surn=$row->surname;
-    $firstname=$row->firstname;
-    $mname=$row->Lastname;
-    $phone=$row->phone;
-     $cate="HMO CARD";
-    $nok=$row->nok;
-    $nokph=$row->nok_phone;
-    $dob=$row->dob;
-    $date=$row->reg_date;
-    $pic=$row->picture;
+    if($row){
+        $surn=$row->surname;
+        $firstname=$row->firstname;
+        $mname=$row->Lastname;
+        $phone=$row->phone;
+        $cate="HMO CARD";
+        $nok=$row->nok;
+        $nokph=$row->nok_phone;
+        $dob=$row->dob;
+        $date=$row->reg_date;
+        $pic=$row->picture;
+    } else {
+        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    }
 }
 elseif (strpos($ind, 'A') !== false) {
     $ret="SELECT * FROM antenatal where acode='$ind'"; 
@@ -102,16 +122,20 @@ elseif (strpos($ind, 'A') !== false) {
     $res=$stmt->get_result();
     $cnt=1;
     $row=$res->fetch_object();
-    $surn=$row->surname;
-    $firstname=$row->firstname;
-    $mname=$row->middlename;
-    $phone=$row->phone;
-     $cate="ANTENATAL CARD";
-    $nok=$row->nok;
-    $nokph=$row->nok_phone;
-    $dob=$row->dob;
-    $date=$row->reg_date;
-    $pic=$row->picture;
+    if($row){
+        $surn=$row->surname;
+        $firstname=$row->firstname;
+        $mname=$row->middlename;
+        $phone=$row->phone;
+        $cate="ANTENATAL CARD";
+        $nok=$row->nok;
+        $nokph=$row->nok_phone;
+        $dob=$row->dob;
+        $date=$row->reg_date;
+        $pic=$row->picture;
+    } else {
+        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    }
 }
 elseif (strpos($ind, 'A') !== false) {
     $ret="SELECT * FROM individual where code='$ind'"; 
@@ -120,16 +144,83 @@ elseif (strpos($ind, 'A') !== false) {
     $res=$stmt->get_result();
     $cnt=1;
     $row=$res->fetch_object();
-    $surn=$row->surname;
-    $firstname=$row->firstname;
-    $mname=$row->middlename;
-    $phone=$row->phone;
-    $nok=$row->nok;
-    $nokph=$row->nok_contact;
-    $dob=$row->dob;
-    $date=$row->reg_date;
-    $pic=$row->picture;
+    if($row){
+        $surn=$row->surname;
+        $firstname=$row->firstname;
+        $mname=$row->middlename;
+        $phone=$row->phone;
+        $nok=$row->nok;
+        $nokph=$row->nok_contact;
+        $dob=$row->dob;
+        $date=$row->reg_date;
+        $pic=$row->picture;
+    } else {
+        $surn=''; $firstname=''; $mname=''; $phone=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    }
 }else{}
+
+// If no row was loaded by the prefix-based checks, try fallbacks:
+// - student by matric_no
+// - staff by staff_no
+if (!isset($row) || !$row) {
+    // try student by matric_no
+    $stmt = $mysqli->prepare("SELECT * FROM student WHERE matric_no = ? LIMIT 1");
+    if ($stmt) {
+        $stmt->bind_param('s', $ind);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res && $res->num_rows > 0) {
+            $row = $res->fetch_object();
+            $surn = isset($row->surname) ? $row->surname : '';
+            $firstname = isset($row->firstname) ? $row->firstname : '';
+            $mname = isset($row->middlename) ? $row->middlename : '';
+            $phone = isset($row->phone) ? $row->phone : '';
+            $cate = 'STUDENT CARD';
+            $nok = isset($row->nok) ? $row->nok : '';
+            $nokph = isset($row->nok_contact) ? $row->nok_contact : '';
+            $dob = isset($row->dob) ? $row->dob : '';
+            $date = isset($row->reg_date) ? $row->reg_date : '';
+            $pic = isset($row->picture) ? $row->picture : '';
+        }
+        $stmt->close();
+    }
+
+    // try staff by staff_no
+    if (!isset($row) || !$row) {
+        $stmt = $mysqli->prepare("SELECT * FROM staff WHERE staff_no = ? LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('s', $ind);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            if ($res && $res->num_rows > 0) {
+                $row = $res->fetch_object();
+                $surn = isset($row->surname) ? $row->surname : '';
+                $firstname = isset($row->firstname) ? $row->firstname : '';
+                $mname = isset($row->middlename) ? $row->middlename : '';
+                $phone = isset($row->phone) ? $row->phone : '';
+                $cate = 'STAFF CARD';
+                $nok = isset($row->nok) ? $row->nok : '';
+                $nokph = isset($row->nok_contact) ? $row->nok_contact : '';
+                $dob = isset($row->dob) ? $row->dob : '';
+                $date = isset($row->reg_date) ? $row->reg_date : '';
+                $pic = isset($row->picture) ? $row->picture : '';
+            }
+            $stmt->close();
+        }
+    }
+}
+
+// Ensure variables exist to avoid 'attempt to read property on null' warnings
+$surn = isset($surn) ? $surn : '';
+$firstname = isset($firstname) ? $firstname : '';
+$mname = isset($mname) ? $mname : '';
+$phone = isset($phone) ? $phone : '';
+$cate = isset($cate) ? $cate : '';
+$nok = isset($nok) ? $nok : '';
+$nokph = isset($nokph) ? $nokph : '';
+$dob = isset($dob) ? $dob : '';
+$date = isset($date) ? $date : '';
+$pic = isset($pic) ? $pic : '';
 
 
 		if(isset($_POST['Send_Signal']))
