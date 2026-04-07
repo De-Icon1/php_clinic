@@ -13,18 +13,22 @@
         //$doc_email = $_POST['doc_ea']
          //$doc_dept='Records';
         $doc_pwd = sha1(md5($_POST['ad_pwd']));//double encrypt to increase security
-        $stmt=$mysqli->prepare("SELECT doc_number, doc_pwd, doc_id, doc_dept FROM his_docs WHERE  doc_number=? AND doc_pwd=? and status=?");//sql to log in user
+        // Include is_hod so Heads of Department can be granted
+        // additional admin permissions while still using their
+        // normal staff login.
+        $stmt=$mysqli->prepare("SELECT doc_number, doc_pwd, doc_id, doc_dept, is_hod FROM his_docs WHERE  doc_number=? AND doc_pwd=? and status=?");//sql to log in user
         $stmt->bind_param('sss', $doc_number, $doc_pwd,$st);//bind fetched parameters
         $stmt->execute();//execute bind
-        $stmt -> bind_result($doc_number, $doc_pwd, $doc_id, $doc_dept);//bind result
+        $stmt -> bind_result($doc_number, $doc_pwd, $doc_id, $doc_dept, $is_hod);//bind result
         $rs=$stmt->fetch();
         $stmt->close();
 
         // Only proceed with session setup if login succeeded
         if ($rs) {
-            $_SESSION['doc_id'] = $doc_id;
-            $_SESSION['doc_number'] = $doc_number;//Assign session to doc_number id
-            $_SESSION['doc_dept']   = $doc_dept;   // Store department for authorization / assignment rules
+            $_SESSION['doc_id']      = $doc_id;
+            $_SESSION['doc_number']  = $doc_number;//Assign session to doc_number id
+            $_SESSION['doc_dept']    = $doc_dept;   // Store department for authorization / assignment rules
+            $_SESSION['is_hod']      = !empty($is_hod) ? (int)$is_hod : 0; // 1 for HODs, 0 otherwise
 
             // 1) Prefer centrally assigned staff_locations (admin/HOD controlled)
             $hasStaffLocation = false;

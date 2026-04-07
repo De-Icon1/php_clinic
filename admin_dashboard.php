@@ -3,7 +3,17 @@
   include('assets/inc/config.php');
   include('assets/inc/checklogins.php');
   check_login();
-  authorize();
+    authorize();
+
+    // Allow full access to this dashboard for both the
+    // main Administrator and any Head of Department (HOD).
+    $isAdmin = isset($_SESSION['doc_dept']) && $_SESSION['doc_dept'] === 'Administrator';
+    $isHod   = !empty($_SESSION['is_hod']);
+
+    if (!$isAdmin && !$isHod) {
+            header('Location: index.php');
+            exit;
+    }
   $aid=$_SESSION['doc_id'];
    $doc_number = $_SESSION['doc_number'];
 ?>
