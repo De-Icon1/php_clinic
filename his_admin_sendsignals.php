@@ -1,5 +1,5 @@
-<!--Server side code to handle  Patient Registration-->
 <?php
+    // Server side: handle Patient Registration
     // Start output buffering early to avoid "headers already sent" issues on some servers
     if (!ob_get_level()) ob_start();
     if (session_status() == PHP_SESSION_NONE) session_start();
