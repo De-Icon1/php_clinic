@@ -17,6 +17,19 @@
                                 
                             </li>
 
+                            <?php
+                            // If this user is an Administrator or marked as
+                            // Head of Department, expose a quick link to the
+                            // full Admin Dashboard from the Records sidebar.
+                            if (!empty($_SESSION['is_hod']) || (isset($_SESSION['doc_dept']) && $_SESSION['doc_dept'] === 'Administrator')): ?>
+                            <li>
+                                <a href="admin_dashboard.php">
+                                    <img src="./assets/img/home.png">
+                                    <span> Admin Dashboard </span>
+                                </a>
+                            </li>
+                            <?php endif; ?>
+
                             <li>
                                 <a href="javascript: void(0);">
                                     <img src="./assets/img/student.jpg"></i>
