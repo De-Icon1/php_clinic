@@ -128,7 +128,7 @@ elseif (strpos($ind, 'S') !== false) {
     }
 }
 elseif (strpos($ind, 'H') !== false) {
-    $ret="SELECT surname,firstname,Lastname AS middlename,phone,nok,nok_phone, dob,reg_date,picture FROM hmocompany_individual where code=?"; 
+    $ret="SELECT surname,firstname,Lastname AS middlename,phone,nok,nok_contact AS nok_contact, dob,reg_date,picture FROM hmocompany_individual where code=?"; 
     $stmt= $mysqli->prepare($ret) ;
     if($stmt){
         $stmt->bind_param('s', $ind);
@@ -152,7 +152,7 @@ elseif (strpos($ind, 'H') !== false) {
     }
 }
 elseif (strpos($ind, 'A') !== false) {
-    $ret="SELECT surname,firstname,middlename,phone,nok,nok_phone AS nok_phone,dob,reg_date,picture FROM antenatal where acode=?"; 
+    $ret="SELECT surname,firstname,middlename,phone,nok,nok_contact AS nok_contact,dob,reg_date,picture FROM antenatal where acode=?"; 
     $stmt= $mysqli->prepare($ret) ;
     if($stmt){
         $stmt->bind_param('s', $ind);

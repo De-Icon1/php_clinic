@@ -53,10 +53,10 @@ function fetch_all_stmt($stmt){
                 $results = array();
 
                 // Search students (by STcode or surname or matric_no)
-                $stmt = $mysqli->prepare("SELECT STcode AS code, CONCAT(surname,' ',firstname) AS name, 'STUDENT' AS type FROM student WHERE UPPER(STcode) = ? OR UPPER(STcode) LIKE ? OR LOWER(surname) = LOWER(?) OR LOWER(surname) LIKE LOWER(?) OR UPPER(matric_no) = ? OR UPPER(matric_no) LIKE ? LIMIT 10");
+                $stmt = $mysqli->prepare("SELECT STcode AS code, CONCAT(surname,' ',firstname) AS name, 'STUDENT' AS type FROM student WHERE UPPER(STcode) = ? OR UPPER(STcode) LIKE ? OR UPPER(surname) = ? OR UPPER(surname) LIKE ? OR UPPER(matric_no) = ? OR UPPER(matric_no) LIKE ? LIMIT 10");
                 if($stmt){
                     // bind order: STcode exact, STcode like, surname exact, surname like, matric exact, matric like
-                    $stmt->bind_param('ssssss', $search_up, $like_up, $search_trim, $like, $search_up, $like_up);
+                    $stmt->bind_param('ssssss', $search_up, $like_up, $search_up, $like_up, $search_up, $like_up);
                     $stmt->execute();
                     $rows = fetch_all_stmt($stmt);
                     foreach($rows as $r){
@@ -66,9 +66,9 @@ function fetch_all_stmt($stmt){
                 }
 
                 // Search staff (Scode, staff_no, surname)
-                $stmt = $mysqli->prepare("SELECT Scode AS code, CONCAT(surname,' ',firstname) AS name, 'STAFF' AS type FROM staff WHERE UPPER(Scode) = ? OR UPPER(Scode) LIKE ? OR LOWER(surname) = LOWER(?) OR LOWER(surname) LIKE LOWER(?) OR UPPER(staff_no) = ? OR UPPER(staff_no) LIKE ? LIMIT 10");
+                $stmt = $mysqli->prepare("SELECT Scode AS code, CONCAT(surname,' ',firstname) AS name, 'STAFF' AS type FROM staff WHERE UPPER(Scode) = ? OR UPPER(Scode) LIKE ? OR UPPER(surname) = ? OR UPPER(surname) LIKE ? OR UPPER(staff_no) = ? OR UPPER(staff_no) LIKE ? LIMIT 10");
                 if($stmt){
-                    $stmt->bind_param('ssssss', $search_up, $like_up, $search_trim, $like, $search_up, $like_up);
+                    $stmt->bind_param('ssssss', $search_up, $like_up, $search_up, $like_up, $search_up, $like_up);
                     $stmt->execute();
                     $rows = fetch_all_stmt($stmt);
                     foreach($rows as $r){
@@ -78,9 +78,9 @@ function fetch_all_stmt($stmt){
                 }
 
                 // Search individual (general patients) by code or surname
-                $stmt = $mysqli->prepare("SELECT code AS code, CONCAT(surname,' ',firstname) AS name, 'INDIVIDUAL' AS type FROM individual WHERE UPPER(code) = ? OR LOWER(surname) = LOWER(?) OR LOWER(surname) LIKE LOWER(?) LIMIT 10");
+                $stmt = $mysqli->prepare("SELECT code AS code, CONCAT(surname,' ',firstname) AS name, 'INDIVIDUAL' AS type FROM individual WHERE UPPER(code) = ? OR UPPER(surname) = ? OR UPPER(surname) LIKE ? LIMIT 10");
                 if($stmt){
-                    $stmt->bind_param('sss', $search_up, $search_trim, $like);
+                    $stmt->bind_param('sss', $search_up, $search_up, $like_up);
                     $stmt->execute();
                     $rows = fetch_all_stmt($stmt);
                     foreach($rows as $r){
