@@ -4,14 +4,68 @@
 	include('assets/inc/config.php');
 
 
-		if(isset($_POST['search']))
-		{
+        if(isset($_POST['search']))
+        {
             $searching = isset($_POST['Searching']) ? trim($_POST['Searching']) : '';
-            
+
             if($searching){
-               echo "<script>location='his_admin_sendsignals.php?id=$searching'</script>";
+                $search = $searching;
+                // If input already looks like a code with a known prefix, keep original behaviour
+                if(strpos($search, 'IND') !== false || strpos($search, 'F') !== false || strpos($search, 'ST') !== false || strpos($search, 'S') !== false || strpos($search, 'H') !== false || strpos($search, 'A') !== false) {
+                    echo "<script>location='his_admin_sendsignals.php?id=$search'</script>";
+                    exit;
+                }
+
+                $results = array();
+                $like = "%".$search."%";
+
+                // Search students (by STcode or surname or code-like match)
+                $stmt = $mysqli->prepare("SELECT STcode AS code, CONCAT(surname,' ',firstname) AS name, 'STUDENT' AS type FROM student WHERE STcode = ? OR STcode LIKE ? OR LOWER(surname) = LOWER(?) OR LOWER(surname) LIKE LOWER(?) OR matric_no = ? OR LOWER(matric_no) LIKE LOWER(?) LIMIT 10");
+                if($stmt){
+                    $stmt->bind_param('ssssss', $search, $like, $search, $like, $search, $like);
+                    $stmt->execute();
+                    $res = $stmt->get_result();
+                    while($r = $res->fetch_assoc()){
+                        $results[] = $r;
+                    }
+                    $stmt->close();
+                }
+
+                // Search staff
+                $stmt = $mysqli->prepare("SELECT Scode AS code, CONCAT(surname,' ',firstname) AS name, 'STAFF' AS type FROM staff WHERE Scode = ? OR Scode LIKE ? OR LOWER(surname) = LOWER(?) OR LOWER(surname) LIKE LOWER(?) OR staff_no = ? OR LOWER(staff_no) LIKE LOWER(?) LIMIT 10");
+                if($stmt){
+                    $stmt->bind_param('ssssss', $search, $like, $search, $like, $search, $like);
+                    $stmt->execute();
+                    $res = $stmt->get_result();
+                    while($r = $res->fetch_assoc()){
+                        $results[] = $r;
+                    }
+                    $stmt->close();
+                }
+
+                // Search individual (general patients) by code or surname
+                $stmt = $mysqli->prepare("SELECT code AS code, CONCAT(surname,' ',firstname) AS name, 'INDIVIDUAL' AS type FROM individual WHERE code = ? OR LOWER(surname) = LOWER(?) OR LOWER(surname) LIKE LOWER(?) LIMIT 10");
+                if($stmt){
+                    $stmt->bind_param('sss', $search, $search, $like);
+                    $stmt->execute();
+                    $res = $stmt->get_result();
+                    while($r = $res->fetch_assoc()){
+                        $results[] = $r;
+                    }
+                    $stmt->close();
+                }
+
+                // If exactly one match, redirect directly to sendsignals
+                if(count($results) == 1){
+                    $code = $results[0]['code'];
+                    echo "<script>location='his_admin_sendsignals.php?id=$code'</script>";
+                    exit;
+                }
+
+                // Otherwise we'll display matches below the form. Store in session for display.
+                $_SESSION['search_results'] = $results;
             }
-		}
+        }
 
 
         
@@ -72,8 +126,8 @@
                                         <form method="post" action="<?php $_SERVER['PHP_SELF']; ?>" enctype="multipart/form-data">
                                              <div class="form-row">
                                                 <div class="form-group col-md-4">
-                                                    <label for="inputCity" class="col-form-label"><h3>Enter Patient Code</h3></label>
-                                                    <input required="required" type="text" style="color:blue;" placeholder="Search Patient By Code" name="Searching" disable class="form-control" id="inputCity">
+                                                    <label for="inputCity" class="col-form-label"><h3>Search Patient (Code, Matric, Staff No or Surname)</h3></label>
+                                                    <input required="required" type="text" style="color:blue;" placeholder="Enter code, matric, staff number, or surname" name="Searching" class="form-control" id="inputCity">
                                                 </div>
 
                                                 
@@ -97,6 +151,30 @@
 
                                         </form>
                                         <!--End Patient Form-->
+
+                                        <?php
+                                        if(isset($_SESSION['search_results']) && is_array($_SESSION['search_results'])){
+                                            $results = $_SESSION['search_results'];
+                                            if(count($results) === 0){
+                                                echo '<div class="alert alert-warning mt-3">No matches found for your search.</div>';
+                                            } else {
+                                                echo '<div class="mt-3">';
+                                                echo '<h5>Search Results</h5>';
+                                                echo '<ul class="list-group">';
+                                                foreach($results as $r){
+                                                    $code = htmlspecialchars($r['code']);
+                                                    $name = htmlspecialchars($r['name']);
+                                                    $type = htmlspecialchars($r['type']);
+                                                    echo '<li class="list-group-item">';
+                                                    echo '<a href="his_admin_sendsignals.php?id='.$code.'">'.$code.' - '.$name.' ('.$type.')</a>';
+                                                    echo '</li>';
+                                                }
+                                                echo '</ul>';
+                                                echo '</div>';
+                                            }
+                                            unset($_SESSION['search_results']);
+                                        }
+                                        ?>
 
 
 
