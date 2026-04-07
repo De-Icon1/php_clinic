@@ -3,6 +3,31 @@
 	session_start();
 	include('assets/inc/config.php');
 
+// Helper: fetch all rows from a prepared statement (works without mysqlnd)
+function fetch_all_stmt($stmt){
+    if(method_exists($stmt,'get_result')){
+        $res = $stmt->get_result();
+        return $res ? $res->fetch_all(MYSQLI_ASSOC) : array();
+    }
+    $meta = $stmt->result_metadata();
+    if(!$meta) return array();
+    $fields = array();
+    $row = array();
+    $bind = array();
+    while($f = $meta->fetch_field()){
+        $fields[] = $f->name;
+        $bind[] = & $row[$f->name];
+    }
+    call_user_func_array(array($stmt, 'bind_result'), $bind);
+    $results = array();
+    while($stmt->fetch()){
+        $r = array();
+        foreach($row as $k=>$v) $r[$k] = $v;
+        $results[] = $r;
+    }
+    return $results;
+}
+
 
         if(isset($_POST['search']))
         {
@@ -24,8 +49,8 @@
                 if($stmt){
                     $stmt->bind_param('ssssss', $search, $like, $search, $like, $search, $like);
                     $stmt->execute();
-                    $res = $stmt->get_result();
-                    while($r = $res->fetch_assoc()){
+                    $rows = fetch_all_stmt($stmt);
+                    foreach($rows as $r){
                         $results[] = $r;
                     }
                     $stmt->close();
@@ -36,8 +61,8 @@
                 if($stmt){
                     $stmt->bind_param('ssssss', $search, $like, $search, $like, $search, $like);
                     $stmt->execute();
-                    $res = $stmt->get_result();
-                    while($r = $res->fetch_assoc()){
+                    $rows = fetch_all_stmt($stmt);
+                    foreach($rows as $r){
                         $results[] = $r;
                     }
                     $stmt->close();
@@ -48,8 +73,8 @@
                 if($stmt){
                     $stmt->bind_param('sss', $search, $search, $like);
                     $stmt->execute();
-                    $res = $stmt->get_result();
-                    while($r = $res->fetch_assoc()){
+                    $rows = fetch_all_stmt($stmt);
+                    foreach($rows as $r){
                         $results[] = $r;
                     }
                     $stmt->close();

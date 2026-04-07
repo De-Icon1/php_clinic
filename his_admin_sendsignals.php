@@ -4,158 +4,196 @@
 	include('assets/inc/config.php');
      $ind=isset($_GET['id']) ? $_GET['id'] : null;
 
+// Helper: fetch one row from a prepared statement in a mysqlnd-safe way.
+function fetch_one_stmt($stmt){
+    if(method_exists($stmt, 'get_result')){
+        $res = $stmt->get_result();
+        return $res ? $res->fetch_object() : null;
+    }
+    $meta = $stmt->result_metadata();
+    if(!$meta) return null;
+    $fields = array();
+    $row = array();
+    $bind = array();
+    while($f = $meta->fetch_field()){
+        $fields[] = $f->name;
+        $bind[] = & $row[$f->name];
+    }
+    call_user_func_array(array($stmt, 'bind_result'), $bind);
+    if($stmt->fetch()){
+        $obj = new stdClass();
+        foreach($row as $k=>$v) $obj->$k = $v;
+        return $obj;
+    }
+    return null;
+}
+
      if (strpos($ind, 'IND') !== false) {
 
-    $ret="SELECT * FROM individual where code='$ind'"; 
+    $ret="SELECT surname,firstname,middlename,phone,nok,nok_contact AS nok_contact,dob,reg_date,picture FROM individual where code=?"; 
     $stmt= $mysqli->prepare($ret) ;
-    $stmt->execute() ;//ok
-    $res=$stmt->get_result();
-    $cnt=1;
-    $row=$res->fetch_object();
-    if($row){
-        $surn=$row->surname;
-        $firstname=$row->firstname;
-        $mname=$row->middlename;
-        $phone=$row->phone;
-        $cate="INDIVIDUAL CARD";
-        $nok=$row->nok;
-        $nokph=$row->nok_contact;
-        $dob=$row->dob;
-        $date=$row->reg_date;
-        $pic=$row->picture;
-    } else {
-        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    if($stmt){
+        $stmt->bind_param('s', $ind);
+        $stmt->execute();
+        $row = fetch_one_stmt($stmt);
+        if($row){
+            $surn=$row->surname;
+            $firstname=$row->firstname;
+            $mname=$row->middlename;
+            $phone=$row->phone;
+            $cate="INDIVIDUAL CARD";
+            $nok=isset($row->nok) ? $row->nok : '';
+            $nokph=isset($row->nok_contact) ? $row->nok_contact : '';
+            $dob=isset($row->dob) ? $row->dob : '';
+            $date=isset($row->reg_date) ? $row->reg_date : '';
+            $pic=isset($row->picture) ? $row->picture : '';
+        } else {
+            $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+        }
+        $stmt->close();
     }
 }
 elseif (strpos($ind, 'F') !== false) {
-    $ret="SELECT * FROM family_individual where code='$ind'"; 
+    $ret="SELECT surname,firstname,middlename,phone,nok,nok_contact AS nok_contact,dob,reg_date,picture FROM family_individual where code=?"; 
     $stmt= $mysqli->prepare($ret) ;
-    $stmt->execute() ;//ok
-    $res=$stmt->get_result();
-    $cnt=1;
-    $row=$res->fetch_object();
-    if($row){
-        $surn=$row->surname;
-        $firstname=$row->firstname;
-        $mname=$row->middlename;
-        $cate="FAMILY CARD";
-        $phone=$row->phone;
-        $nok=$row->nok;
-        $nokph=$row->nok_contact;
-        $dob=$row->dob;
-        $date=$row->reg_date;
-        $pic=$row->picture;
-    } else {
-        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    if($stmt){
+        $stmt->bind_param('s', $ind);
+        $stmt->execute();
+        $row = fetch_one_stmt($stmt);
+        if($row){
+            $surn=$row->surname;
+            $firstname=$row->firstname;
+            $mname=$row->middlename;
+            $cate="FAMILY CARD";
+            $phone=$row->phone;
+            $nok=isset($row->nok) ? $row->nok : '';
+            $nokph=isset($row->nok_contact) ? $row->nok_contact : '';
+            $dob=isset($row->dob) ? $row->dob : '';
+            $date=isset($row->reg_date) ? $row->reg_date : '';
+            $pic=isset($row->picture) ? $row->picture : '';
+        } else {
+            $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+        }
+        $stmt->close();
     }
 }
 elseif (strpos($ind, 'ST') !== false) {
-    $ret="SELECT * FROM student where STcode='$ind'"; 
+    $ret="SELECT surname,firstname,middlename,phone,nok,nok_contact AS nok_contact,dob,reg_date,picture,matric_no FROM student where STcode=?"; 
     $stmt= $mysqli->prepare($ret) ;
-    $stmt->execute() ;//ok
-    $res=$stmt->get_result();
-    $cnt=1;
-    $row=$res->fetch_object();
-    if($row){
-        $surn=$row->surname;
-        $firstname=$row->firstname;
-        $mname=$row->middlename;
-        $cate="STUDENT CARD";
-        $phone=$row->phone;
-        $nok=$row->nok;
-        $nokph=$row->nok_contact;
-        $dob=$row->dob;
-        $date=$row->reg_date;
-        $pic=$row->picture;
-    } else {
-        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    if($stmt){
+        $stmt->bind_param('s', $ind);
+        $stmt->execute();
+        $row = fetch_one_stmt($stmt);
+        if($row){
+            $surn=$row->surname;
+            $firstname=$row->firstname;
+            $mname=$row->middlename;
+            $cate="STUDENT CARD";
+            $phone=$row->phone;
+            $nok=isset($row->nok) ? $row->nok : '';
+            $nokph=isset($row->nok_contact) ? $row->nok_contact : '';
+            $dob=isset($row->dob) ? $row->dob : '';
+            $date=isset($row->reg_date) ? $row->reg_date : '';
+            $pic=isset($row->picture) ? $row->picture : '';
+        } else {
+            $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+        }
+        $stmt->close();
     }
 }
 elseif (strpos($ind, 'S') !== false) {
-    $ret="SELECT * FROM staff where Scode='$ind'"; 
+    $ret="SELECT surname,firstname,middlename,phone,nok,nok_contact AS nok_contact,dob,reg_date,picture,staff_no FROM staff where Scode=?"; 
     $stmt= $mysqli->prepare($ret) ;
-    $stmt->execute() ;//ok
-    $res=$stmt->get_result();
-    $cnt=1;
-    $row=$res->fetch_object();
-    if($row){
-        $surn=$row->surname;
-        $firstname=$row->firstname;
-        $cate="STAFF CARD";
-        $mname=$row->middlename;
-        $phone=$row->phone;
-        $nok=$row->nok;
-        $nokph=$row->nok_contact;
-        $dob=$row->dob;
-        $date=$row->reg_date;
-        $pic=$row->picture;
-    } else {
-        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    if($stmt){
+        $stmt->bind_param('s', $ind);
+        $stmt->execute();
+        $row = fetch_one_stmt($stmt);
+        if($row){
+            $surn=$row->surname;
+            $firstname=$row->firstname;
+            $cate="STAFF CARD";
+            $mname=$row->middlename;
+            $phone=$row->phone;
+            $nok=isset($row->nok) ? $row->nok : '';
+            $nokph=isset($row->nok_contact) ? $row->nok_contact : '';
+            $dob=isset($row->dob) ? $row->dob : '';
+            $date=isset($row->reg_date) ? $row->reg_date : '';
+            $pic=isset($row->picture) ? $row->picture : '';
+        } else {
+            $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+        }
+        $stmt->close();
     }
 }
 elseif (strpos($ind, 'H') !== false) {
-    $ret="SELECT * FROM hmocompany_individual where code='$ind'"; 
+    $ret="SELECT surname,firstname,Lastname AS middlename,phone,nok,nok_phone, dob,reg_date,picture FROM hmocompany_individual where code=?"; 
     $stmt= $mysqli->prepare($ret) ;
-    $stmt->execute() ;//ok
-    $res=$stmt->get_result();
-    $cnt=1;
-    $row=$res->fetch_object();
-    if($row){
-        $surn=$row->surname;
-        $firstname=$row->firstname;
-        $mname=$row->Lastname;
-        $phone=$row->phone;
-        $cate="HMO CARD";
-        $nok=$row->nok;
-        $nokph=$row->nok_phone;
-        $dob=$row->dob;
-        $date=$row->reg_date;
-        $pic=$row->picture;
-    } else {
-        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    if($stmt){
+        $stmt->bind_param('s', $ind);
+        $stmt->execute();
+        $row = fetch_one_stmt($stmt);
+        if($row){
+            $surn=$row->surname;
+            $firstname=$row->firstname;
+            $mname=isset($row->middlename) ? $row->middlename : '';
+            $phone=$row->phone;
+            $cate="HMO CARD";
+            $nok=isset($row->nok) ? $row->nok : '';
+            $nokph=isset($row->nok_phone) ? $row->nok_phone : '';
+            $dob=isset($row->dob) ? $row->dob : '';
+            $date=isset($row->reg_date) ? $row->reg_date : '';
+            $pic=isset($row->picture) ? $row->picture : '';
+        } else {
+            $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+        }
+        $stmt->close();
     }
 }
 elseif (strpos($ind, 'A') !== false) {
-    $ret="SELECT * FROM antenatal where acode='$ind'"; 
+    $ret="SELECT surname,firstname,middlename,phone,nok,nok_phone AS nok_phone,dob,reg_date,picture FROM antenatal where acode=?"; 
     $stmt= $mysqli->prepare($ret) ;
-    $stmt->execute() ;//ok
-    $res=$stmt->get_result();
-    $cnt=1;
-    $row=$res->fetch_object();
-    if($row){
-        $surn=$row->surname;
-        $firstname=$row->firstname;
-        $mname=$row->middlename;
-        $phone=$row->phone;
-        $cate="ANTENATAL CARD";
-        $nok=$row->nok;
-        $nokph=$row->nok_phone;
-        $dob=$row->dob;
-        $date=$row->reg_date;
-        $pic=$row->picture;
-    } else {
-        $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    if($stmt){
+        $stmt->bind_param('s', $ind);
+        $stmt->execute();
+        $row = fetch_one_stmt($stmt);
+        if($row){
+            $surn=$row->surname;
+            $firstname=$row->firstname;
+            $mname=$row->middlename;
+            $phone=$row->phone;
+            $cate="ANTENATAL CARD";
+            $nok=isset($row->nok) ? $row->nok : '';
+            $nokph=isset($row->nok_phone) ? $row->nok_phone : '';
+            $dob=isset($row->dob) ? $row->dob : '';
+            $date=isset($row->reg_date) ? $row->reg_date : '';
+            $pic=isset($row->picture) ? $row->picture : '';
+        } else {
+            $surn=''; $firstname=''; $mname=''; $phone=''; $cate=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+        }
+        $stmt->close();
     }
 }
 elseif (strpos($ind, 'A') !== false) {
-    $ret="SELECT * FROM individual where code='$ind'"; 
+    $ret="SELECT surname,firstname,middlename,phone,nok,nok_contact AS nok_contact,dob,reg_date,picture FROM individual where code=?"; 
     $stmt= $mysqli->prepare($ret) ;
-    $stmt->execute() ;//ok
-    $res=$stmt->get_result();
-    $cnt=1;
-    $row=$res->fetch_object();
-    if($row){
-        $surn=$row->surname;
-        $firstname=$row->firstname;
-        $mname=$row->middlename;
-        $phone=$row->phone;
-        $nok=$row->nok;
-        $nokph=$row->nok_contact;
-        $dob=$row->dob;
-        $date=$row->reg_date;
-        $pic=$row->picture;
-    } else {
-        $surn=''; $firstname=''; $mname=''; $phone=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+    if($stmt){
+        $stmt->bind_param('s', $ind);
+        $stmt->execute();
+        $row = fetch_one_stmt($stmt);
+        if($row){
+            $surn=$row->surname;
+            $firstname=$row->firstname;
+            $mname=$row->middlename;
+            $phone=$row->phone;
+            $nok=isset($row->nok) ? $row->nok : '';
+            $nokph=isset($row->nok_contact) ? $row->nok_contact : '';
+            $dob=isset($row->dob) ? $row->dob : '';
+            $date=isset($row->reg_date) ? $row->reg_date : '';
+            $pic=isset($row->picture) ? $row->picture : '';
+        } else {
+            $surn=''; $firstname=''; $mname=''; $phone=''; $nok=''; $nokph=''; $dob=''; $date=''; $pic='';
+        }
+        $stmt->close();
     }
 }else{}
 
