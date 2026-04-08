@@ -166,24 +166,42 @@
                                                 $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
                                             }
 
-                                            // Build query to match debug_sendsignal.php behavior
-                                            if ($hascamp && $campus_id) {
-                                                // Campus-aware queries
-                                                if ($status === 'Checked') {
-                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Checked' AND campus_id = ? ORDER BY id DESC";
-                                                    $stmt = $mysqli->prepare($ret);
-                                                    $stmt->bind_param('si', $rdate, $campus_id);
-                                                } elseif ($status === 'All') {
-                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND campus_id = ? ORDER BY id DESC";
-                                                    $stmt = $mysqli->prepare($ret);
-                                                    $stmt->bind_param('si', $rdate, $campus_id);
-                                                } else { // default 'Not Yet'
-                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Not Yet' AND campus_id = ? ORDER BY id DESC";
-                                                    $stmt = $mysqli->prepare($ret);
-                                                    $stmt->bind_param('si', $rdate, $campus_id);
+                                            // Build query with campus/location scoping (strict when campus_id is set)
+                                            if ($hascamp) {
+                                                if ($campus_id) {
+                                                    // Nurse has a campus: show only records from that campus
+                                                    if ($status === 'Checked') {
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Checked' AND campus_id = ? ORDER BY id DESC";
+                                                        $stmt = $mysqli->prepare($ret);
+                                                        $stmt->bind_param('si', $rdate, $campus_id);
+                                                    } elseif ($status === 'All') {
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND campus_id = ? ORDER BY id DESC";
+                                                        $stmt = $mysqli->prepare($ret);
+                                                        $stmt->bind_param('si', $rdate, $campus_id);
+                                                    } else { // default 'Not Yet'
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Not Yet' AND campus_id = ? ORDER BY id DESC";
+                                                        $stmt = $mysqli->prepare($ret);
+                                                        $stmt->bind_param('si', $rdate, $campus_id);
+                                                    }
+                                                } else {
+                                                    // campus_id column exists but this user has no campus assigned:
+                                                    // only show unassigned rows (NULL or 0) so data isn't leaked across campuses.
+                                                    if ($status === 'Checked') {
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Checked' AND (campus_id IS NULL OR campus_id = 0) ORDER BY id DESC";
+                                                        $stmt = $mysqli->prepare($ret);
+                                                        $stmt->bind_param('s', $rdate);
+                                                    } elseif ($status === 'All') {
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND (campus_id IS NULL OR campus_id = 0) ORDER BY id DESC";
+                                                        $stmt = $mysqli->prepare($ret);
+                                                        $stmt->bind_param('s', $rdate);
+                                                    } else { // 'Not Yet'
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Not Yet' AND (campus_id IS NULL OR campus_id = 0) ORDER BY id DESC";
+                                                        $stmt = $mysqli->prepare($ret);
+                                                        $stmt->bind_param('s', $rdate);
+                                                    }
                                                 }
                                             } else {
-                                                // Fallback: ignore campus, filter only by date/status
+                                                // No campus_id column at all: fall back to date/status only
                                                 if ($status === 'Checked') {
                                                     $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Checked' ORDER BY id DESC";
                                                     $stmt = $mysqli->prepare($ret);
@@ -199,23 +217,9 @@
                                                 }
                                             }
 
-                                            // Optional debug: append &debug_sql=1 in URL to see query info on server
-                                            if (isset($_GET['debug_sql']) && $_GET['debug_sql'] == '1') {
-                                                echo '<pre style="background:#eef;padding:8px;">';
-                                                echo 'DEBUG status=' . htmlspecialchars($status) . "\n";
-                                                echo 'DEBUG campus_id=' . ($campus_id ? (int)$campus_id : 'NULL') . "\n";
-                                                echo 'DEBUG hascamp=' . $hascamp . "\n";
-                                                echo 'DEBUG SQL=' . htmlspecialchars($ret) . "\n";
-                                                echo '</pre>';
-                                            }
-
                                             if ($stmt) {
                                                 $stmt->execute();
                                                 $res=$stmt->get_result();
-
-                                                if (isset($_GET['debug_sql']) && $_GET['debug_sql'] == '1') {
-                                                    echo '<p style="color:green;">DEBUG rows found: ' . $res->num_rows . '</p>';
-                                                }
                                                 $cnt=1;
                                                 while($row=$res->fetch_object())
                                                 {
