@@ -40,8 +40,8 @@ include('assets/inc/config.php');
     );
     $stmt->execute();
 
-    // Update sendsignal
-    $query2 = "UPDATE sendsignal SET status=? WHERE pat_code=? AND Date=?";
+    // Update sendsignal (DATE() wrapper so it works if Date is DATETIME)
+    $query2 = "UPDATE sendsignal SET status=? WHERE pat_code=? AND DATE(Date)=?";
     $stmts = $mysqli->prepare($query2);
     $stmts->bind_param('sss', $status, $vit_pat_number, $dated);
     $stmts->execute();
@@ -81,7 +81,8 @@ include('assets/inc/config.php');
                 $pat_number = $_GET['pat_number'];
                 $status='Not Yet';
                 $date=date("Y-m-d");
-                $ret="SELECT  * FROM sendsignal WHERE pat_code=? and Date=? and status=?";
+                // Use DATE(Date)=? so it matches even if the column is DATETIME
+                $ret="SELECT  * FROM sendsignal WHERE pat_code=? and DATE(Date)=? and status=?";
                 $stmt= $mysqli->prepare($ret) ;
                 $stmt->bind_param('sss',$pat_number,$date,$status);
                 $stmt->execute() ;//ok

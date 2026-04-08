@@ -175,22 +175,22 @@
                                                     // Show records assigned to this campus, plus unassigned rows (0 or NULL).
                                                     // This ensures signals created when session was not set still appear.
                                                     if ($status === 'All') {
-                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND (campus_id = ? OR campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND (campus_id = ? OR campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);
                                                         $stmt->bind_param('si', $rdate, $campus_id);
                                                     } else {
-                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND status = ? AND (campus_id = ? OR campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = ? AND (campus_id = ? OR campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);
                                                         $stmt->bind_param('ssi', $rdate, $status, $campus_id);
                                                     }
                                                 } else {
                                                     // Column exists but user has no campus assigned: show only unassigned rows (0 or NULL).
                                                     if ($status === 'All') {
-                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND (campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND (campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);
                                                         $stmt->bind_param('s', $rdate);
                                                     } else {
-                                                        $ret = "SELECT * FROM sendsignal WHERE Date = ? AND status = ? AND (campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = ? AND (campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);
                                                         $stmt->bind_param('ss', $rdate, $status);
                                                     }
@@ -198,11 +198,11 @@
                                             } else {
                                                 // No campus column in sendsignal: fall back to Date/status only
                                                 if ($status === 'All') {
-                                                    $ret = "SELECT * FROM sendsignal WHERE Date = ? ORDER BY id DESC";
+                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? ORDER BY id DESC";
                                                     $stmt = $mysqli->prepare($ret);
                                                     $stmt->bind_param('s', $rdate);
                                                 } else {
-                                                    $ret = "SELECT * FROM sendsignal WHERE Date = ? AND status = ? ORDER BY id DESC";
+                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = ? ORDER BY id DESC";
                                                     $stmt = $mysqli->prepare($ret);
                                                     $stmt->bind_param('ss', $rdate, $status);
                                                 }

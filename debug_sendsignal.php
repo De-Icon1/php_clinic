@@ -27,9 +27,9 @@ if ($resCol) {
 echo "<h3>Campus Column Check</h3>";
 echo "<p>campus_id column exists: " . ($hascamp ? "YES" : "NO") . "</p>";
 
-// Query all sendsignal records for today
+// Query all sendsignal records for today (DATE() wrapper handles DATE or DATETIME columns)
 echo "<h3>All sendsignal records for today</h3>";
-$query_all = "SELECT id, pat_code, Fullname, Date, status, campus_id FROM sendsignal WHERE Date = ? ORDER BY id DESC";
+$query_all = "SELECT id, pat_code, Fullname, Date, status, campus_id FROM sendsignal WHERE DATE(Date) = ? ORDER BY id DESC";
 $stmt_all = $mysqli->prepare($query_all);
 $stmt_all->bind_param('s', $rdate);
 $stmt_all->execute();
@@ -52,7 +52,7 @@ echo "</table>";
 // Query filtered by user's campus
 if ($hascamp && $campus_id) {
     echo "<h3>Records for user's campus (campus_id = $campus_id) with status='Not Yet'</h3>";
-    $query_filtered = "SELECT id, pat_code, Fullname, Date, status, campus_id FROM sendsignal WHERE Date = ? AND status = 'Not Yet' AND campus_id = ? ORDER BY id DESC";
+    $query_filtered = "SELECT id, pat_code, Fullname, Date, status, campus_id FROM sendsignal WHERE DATE(Date) = ? AND status = 'Not Yet' AND campus_id = ? ORDER BY id DESC";
     $stmt_filtered = $mysqli->prepare($query_filtered);
     $stmt_filtered->bind_param('si', $rdate, $campus_id);
     $stmt_filtered->execute();
@@ -74,7 +74,7 @@ if ($hascamp && $campus_id) {
     echo "</table>";
 } else {
     echo "<h3>No campus filtering (campus column may not exist or user has no campus)</h3>";
-    $query_no_filter = "SELECT id, pat_code, Fullname, Date, status, campus_id FROM sendsignal WHERE Date = ? AND status = 'Not Yet' ORDER BY id DESC";
+    $query_no_filter = "SELECT id, pat_code, Fullname, Date, status, campus_id FROM sendsignal WHERE DATE(Date) = ? AND status = 'Not Yet' ORDER BY id DESC";
     $stmt_no_filter = $mysqli->prepare($query_no_filter);
     $stmt_no_filter->bind_param('s', $rdate);
     $stmt_no_filter->execute();
