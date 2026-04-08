@@ -146,20 +146,18 @@
                                                 *Filter by campus location to show only patients from user's location
                                                 *Use working_location_id from session (set during login in index.php)
                                             */
-                                            $rdate=date('Y-m-d');
-                                            
+                                            $rdate = date('Y-m-d');
+
                                             // Get status filter from URL or POST (default to "Not Yet")
-                                            $status = isset($_GET['status_filter']) ? $_GET['status_filter'] : (isset($_POST['status_filter']) ? $_POST['status_filter'] : 'Not Yet');
-                                            
-                                            // Get campus/location from session (prefer working_location_id, fall back to campus_id if numeric)
-                                            if (isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id'])) {
-                                                $campus_id = (int) $_SESSION['working_location_id'];
-                                            } elseif (isset($_SESSION['campus_id']) && is_numeric($_SESSION['campus_id'])) {
-                                                $campus_id = (int) $_SESSION['campus_id'];
-                                            } else {
-                                                $campus_id = null;
-                                            }
-                                            
+                                            $status = isset($_GET['status_filter'])
+                                                ? $_GET['status_filter']
+                                                : (isset($_POST['status_filter']) ? $_POST['status_filter'] : 'Not Yet');
+
+                                            // Get campus/location from session (align with debug_sendsignal.php)
+                                            $campus_id = isset($_SESSION['working_location_id']) && is_numeric($_SESSION['working_location_id'])
+                                                ? (int) $_SESSION['working_location_id']
+                                                : null;
+
                                             // Check if sendsignal table has campus_id column
                                             $hascamp = 0;
                                             $resCol = $mysqli->query("SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='sendsignal' AND COLUMN_NAME='campus_id'");
@@ -167,44 +165,37 @@
                                                 $rowCol = $resCol->fetch_assoc();
                                                 $hascamp = isset($rowCol['cnt']) ? (int)$rowCol['cnt'] : 0;
                                             }
-                                            
-                                            // Build query with campus/location scoping
-                                            // If the sendsignal table has a campus_id column we must strictly scope to the staff's campus.
-                                            if ($hascamp) {
-                                                if ($campus_id) {
-                                                    // Show records assigned to this campus, plus unassigned rows (0 or NULL).
-                                                    // This ensures signals created when session was not set still appear.
-                                                    if ($status === 'All') {
-                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND (campus_id = ? OR campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
-                                                        $stmt = $mysqli->prepare($ret);
-                                                        $stmt->bind_param('si', $rdate, $campus_id);
-                                                    } else {
-                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = ? AND (campus_id = ? OR campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
-                                                        $stmt = $mysqli->prepare($ret);
-                                                        $stmt->bind_param('ssi', $rdate, $status, $campus_id);
-                                                    }
-                                                } else {
-                                                    // Column exists but user has no campus assigned: show only unassigned rows (0 or NULL).
-                                                    if ($status === 'All') {
-                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND (campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
-                                                        $stmt = $mysqli->prepare($ret);
-                                                        $stmt->bind_param('s', $rdate);
-                                                    } else {
-                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = ? AND (campus_id = 0 OR campus_id IS NULL) ORDER BY id DESC";
-                                                        $stmt = $mysqli->prepare($ret);
-                                                        $stmt->bind_param('ss', $rdate, $status);
-                                                    }
+
+                                            // Build query to match debug_sendsignal.php behavior
+                                            if ($hascamp && $campus_id) {
+                                                // Campus-aware queries
+                                                if ($status === 'Checked') {
+                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Checked' AND campus_id = ? ORDER BY id DESC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('si', $rdate, $campus_id);
+                                                } elseif ($status === 'All') {
+                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND campus_id = ? ORDER BY id DESC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('si', $rdate, $campus_id);
+                                                } else { // default 'Not Yet'
+                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Not Yet' AND campus_id = ? ORDER BY id DESC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('si', $rdate, $campus_id);
                                                 }
                                             } else {
-                                                // No campus column in sendsignal: fall back to Date/status only
-                                                if ($status === 'All') {
+                                                // Fallback: ignore campus, filter only by date/status
+                                                if ($status === 'Checked') {
+                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Checked' ORDER BY id DESC";
+                                                    $stmt = $mysqli->prepare($ret);
+                                                    $stmt->bind_param('s', $rdate);
+                                                } elseif ($status === 'All') {
                                                     $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? ORDER BY id DESC";
                                                     $stmt = $mysqli->prepare($ret);
                                                     $stmt->bind_param('s', $rdate);
-                                                } else {
-                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = ? ORDER BY id DESC";
+                                                } else { // 'Not Yet'
+                                                    $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Not Yet' ORDER BY id DESC";
                                                     $stmt = $mysqli->prepare($ret);
-                                                    $stmt->bind_param('ss', $rdate, $status);
+                                                    $stmt->bind_param('s', $rdate);
                                                 }
                                             }
                                             
