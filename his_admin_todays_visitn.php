@@ -185,17 +185,17 @@
                                                     }
                                                 } else {
                                                     // campus_id column exists but this user has no campus assigned:
-                                                    // only show unassigned rows (NULL or 0) so data isn't leaked across campuses.
+                                                    // fall back to global (all-campus) view filtered only by date/status.
                                                     if ($status === 'Checked') {
-                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Checked' AND (campus_id IS NULL OR campus_id = 0) ORDER BY id DESC";
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Checked' ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);
                                                         $stmt->bind_param('s', $rdate);
                                                     } elseif ($status === 'All') {
-                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND (campus_id IS NULL OR campus_id = 0) ORDER BY id DESC";
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);
                                                         $stmt->bind_param('s', $rdate);
                                                     } else { // 'Not Yet'
-                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Not Yet' AND (campus_id IS NULL OR campus_id = 0) ORDER BY id DESC";
+                                                        $ret = "SELECT * FROM sendsignal WHERE DATE(Date) = ? AND status = 'Not Yet' ORDER BY id DESC";
                                                         $stmt = $mysqli->prepare($ret);
                                                         $stmt->bind_param('s', $rdate);
                                                     }
