@@ -217,9 +217,22 @@
                                                 }
                                             }
 
+                                            // Temporary debug helper: add &debug_sql=1 in URL to inspect query behavior on server
+                                            if (isset($_GET['debug_sql']) && $_GET['debug_sql'] == '1') {
+                                                echo '<pre style="background:#eef;padding:8px;">';
+                                                echo 'DEBUG status=' . htmlspecialchars($status) . "\n";
+                                                echo 'DEBUG campus_id=' . ($campus_id !== null ? (int)$campus_id : 'NULL') . "\n";
+                                                echo 'DEBUG hascamp=' . $hascamp . "\n";
+                                                echo 'DEBUG SQL=' . htmlspecialchars($ret) . "\n";
+                                                echo '</pre>';
+                                            }
+
                                             if ($stmt) {
                                                 $stmt->execute();
                                                 $res=$stmt->get_result();
+                                                if (isset($_GET['debug_sql']) && $_GET['debug_sql'] == '1') {
+                                                    echo '<p style="color:green;">DEBUG rows found: ' . $res->num_rows . '</p>';
+                                                }
                                                 $cnt=1;
                                                 while($row=$res->fetch_object())
                                                 {
