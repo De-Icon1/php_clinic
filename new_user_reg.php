@@ -11,6 +11,10 @@
             $pwd=sha1(md5($_POST['pwd']));
             $rpwd=sha1(md5($_POST['rpwd']));
              $dept=$_POST['dept'];
+             // Flag to mark this user as an admin / Head of Department
+             // so they can access the Admin Dashboard while still
+             // belonging to their normal department.
+             $is_hod = isset($_POST['is_hod']) ? 1 : 0;
              $status='ACTIVE';
             $pics=$_FILES["pics"]["name"];
 
@@ -20,9 +24,9 @@
 
                  move_uploaded_file($_FILES["pics"]["tmp_name"],"picture/".$_FILES["pics"]["name"]);
    
-            $query="insert into his_docs(doc_fname,doc_lname,doc_email,doc_pwd,doc_dept,doc_number,doc_dpic,status) values(?,?,?,?,?,?,?,?)";
+            $query="insert into his_docs(doc_fname,doc_lname,doc_email,doc_pwd,doc_dept,doc_number,doc_dpic,status,is_hod) values(?,?,?,?,?,?,?,?,?)";
             $stmt = $mysqli->prepare($query);
-            $rc=$stmt->bind_param('ssssssss',$pat_surn,$pat_fname,$email,$pwd,$dept, $staff_code,$pics,$status);
+            $rc=$stmt->bind_param('ssssssssi',$pat_surn,$pat_fname,$email,$pwd,$dept, $staff_code,$pics,$status,$is_hod);
             $stmt->execute();
             /*
             *Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
@@ -179,6 +183,17 @@
                                                             </div>
                                                         </div> 
                                                         
+                                                    </div> <!-- end row -->
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <div class="form-group">
+                                                                <div class="custom-control custom-checkbox mt-2">
+                                                                    <input type="checkbox" class="custom-control-input" id="is_hod" name="is_hod" value="1">
+                                                                    <label class="custom-control-label" for="is_hod">Grant this user Admin / HOD access</label>
+                                                                </div>
+                                                                <small class="form-text text-muted">User keeps their selected department but can access the Admin Dashboard.</small>
+                                                            </div>
+                                                        </div>
                                                     </div> <!-- end row -->
                                                     <div class="row">
                                                     
