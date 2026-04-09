@@ -277,15 +277,18 @@
                                                     $hascamp = $resCol ? (int)$resCol->fetch_assoc()['cnt'] : 0;
                                                     if ($hascamp) {
                                                         if ($campus_id) {
-                                                            $result = "SELECT count(*) FROM sendsignal WHERE Date = ? AND campus_id = ?";
+                                                            // Campus-scoped count for this admin's location
+                                                            $result = "SELECT count(*) FROM sendsignal WHERE DATE(Date) = ? AND campus_id = ?";
                                                             $stmt = $mysqli->prepare($result);
                                                             $stmt->bind_param('si', $rdate, $campus_id);
                                                         } else {
-                                                            $result = "SELECT 0";
+                                                            // No campus set in session: fall back to all campuses for today
+                                                            $result = "SELECT count(*) FROM sendsignal WHERE DATE(Date) = ?";
                                                             $stmt = $mysqli->prepare($result);
+                                                            $stmt->bind_param('s', $rdate);
                                                         }
                                                     } else {
-                                                        $result = "SELECT count(*) FROM sendsignal WHERE Date = ?";
+                                                        $result = "SELECT count(*) FROM sendsignal WHERE DATE(Date) = ?";
                                                         $stmt = $mysqli->prepare($result);
                                                         $stmt->bind_param('s', $rdate);
                                                     }

@@ -44,14 +44,9 @@ function fetch_all_stmt($stmt){
                 $like_up = "%".$search_up."%";
                 $like_low = "%".$search_low."%";
 
-                // If input already looks like a code with a known prefix, keep original behaviour
-                if(strpos($search_up, 'IND') !== false || strpos($search_up, 'F') !== false || strpos($search_up, 'ST') !== false || strpos($search_up, 'S') !== false || strpos($search_up, 'H') !== false || strpos($search_up, 'A') !== false) {
-                    // Use the original (trimmed) value in redirect to preserve formatting if needed
-                    $redir = $search_trim;
-                    echo "<script>location='his_admin_sendsignals.php?id=$redir'</script>";
-                    exit;
-                }
-
+                // Always treat the search text (matric, staff no, surname, or even a code)
+                // as a way to *locate* the patient record, then use the patient code
+                // (STcode / Scode / code) for redirects.
                 $results = array();
 
                 // Search students (by STcode or surname or matric_no)
