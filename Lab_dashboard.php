@@ -67,10 +67,7 @@
                                         <div class="col-6">
                                             <div class="avatar-lg rounded-circle bg-soft-primary border-primary border">
                                                 <i class="fab fa-accessible-icon  font-22 avatar-title text-primary"></i>
-                                                <h4 class="page-title">OOU Hospital Management System Dashboard</h4>
-                                                <?php if (!empty($_SESSION['working_location'])): ?>
-                                                    <p class="text-muted mb-0">Current Working Location: <strong><?php echo htmlspecialchars($_SESSION['working_location']); ?></strong></p>
-                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                         <div class="col-6">
                                             <div class="text-right">
@@ -291,7 +288,7 @@
                         <div class="row">
                             <div class="col-xl-12">
                                 <div class="card-box">
-                                    <h4 class="header-title mb-3">Hospital Scan Unit</h4>
+                                    <h4 class="header-title mb-3">OOU Health Centre Lab Unit</h4>
 
                                     <div class="table-responsive">
                                         <table class="table table-borderless table-hover table-centered m-0">
@@ -306,7 +303,7 @@
                                                 </tr>
                                             </thead>
                                             <?php
-                                                $ret="SELECT * FROM his_docs where doc_dept='Nursing' ORDER BY RAND() LIMIT 10 "; 
+                                                $ret="SELECT * FROM his_docs where doc_dept='Laboratory' ORDER BY RAND() LIMIT 10 "; 
                                                 //sql code to get to ten docs  randomly
                                                 $stmt= $mysqli->prepare($ret) ;
                                                 $stmt->execute() ;//ok
