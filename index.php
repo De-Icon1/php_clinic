@@ -63,7 +63,15 @@
         // If login succeeded but no working location is assigned, block access for non-admin users
         // until an admin/HOD assigns one via staff_locations. Administrators are allowed to log in
         // without a working location so they can manage assignments.
-        if ($rs && (empty($_SESSION['working_location_id']) || !is_numeric($_SESSION['working_location_id'])) && $doc_dept != 'Administrator') {
+        // For most staff, a working location must be assigned before login succeeds.
+        // However, the Vice Chancellor should be able to log in without being bound
+        // to any specific campus/location, so skip this check for that department.
+        if (
+            $rs &&
+            (empty($_SESSION['working_location_id']) || !is_numeric($_SESSION['working_location_id'])) &&
+            $doc_dept != 'Administrator' &&
+            $doc_dept != 'Vice Chancellor'
+        ) {
             $err = "No active working location assigned. Please contact your head of unit or administrator.";
         }
         if($rs && empty($err))

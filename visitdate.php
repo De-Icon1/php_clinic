@@ -77,7 +77,14 @@ function getscan($mysqli){
             <!-- end Topbar -->
 
             <!-- ========== Left Sidebar Start ========== -->
-            <?php include("assets/inc/sidebar_admin.php");?>
+            <?php
+            // Use VC sidebar for Vice Chancellor, admin sidebar for others
+            $sidebar = 'assets/inc/sidebar_admin.php';
+            if (isset($_SESSION['doc_dept']) && strtolower(trim($_SESSION['doc_dept'])) === 'vice chancellor') {
+                $sidebar = 'assets/inc/sidebar_vc.php';
+            }
+            include($sidebar);
+            ?>
             <!-- Left Sidebar End -->
 
             <!-- ============================================================== -->

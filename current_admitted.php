@@ -11,7 +11,14 @@ $campus_id = isset($_SESSION['campus_id']) ? (int) $_SESSION['campus_id'] : null
 <body>
 <div id="wrapper">
 <?php include('assets/inc/nav_r.php');?>
-<?php include('assets/inc/sidebar_admin.php');?>
+<?php
+// Use VC sidebar for Vice Chancellor, admin sidebar for others
+$sidebar = 'assets/inc/sidebar_admin.php';
+if (isset($_SESSION['doc_dept']) && strtolower(trim($_SESSION['doc_dept'])) === 'vice chancellor') {
+    $sidebar = 'assets/inc/sidebar_vc.php';
+}
+include($sidebar);
+?>
 <div class="content-page"><div class="content"><div class="container-fluid">
     <div class="page-title-box"><h4 class="page-title">Current Admitted Patients</h4></div>
     <div class="card"><div class="card-body">
