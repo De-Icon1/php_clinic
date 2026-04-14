@@ -2,8 +2,213 @@
 <?php
     session_start();
     include('assets/inc/config.php');
-        if(isset($_POST['add_patient']))
-        {
+
+    // Simple status messages for the UI
+    $err = '';
+    $success = '';
+
+    // Configuration for portal lookup scanning. Reuse the
+    // student card defaults but keep a tighter cap for staff.
+    if (!defined('UG_FIND_MAX_PAGES')) {
+        define('UG_FIND_MAX_PAGES', 200);
+    }
+    if (!defined('UG_FIND_PAGE_SIZE')) {
+        define('UG_FIND_PAGE_SIZE', 200);
+    }
+    // For staff portal lookups, cap the number of pages we
+    // walk to avoid long scans on large datasets.
+    if (!defined('STAFF_FIND_MAX_PAGES')) {
+        define('STAFF_FIND_MAX_PAGES', 50);
+    }
+
+    // Helper: fetch portal users (students/staff) via local OOU proxy API (single page)
+    // Note: $username and $password are no longer used; kept for compatibility.
+    function fetch_ug_students($page = 1, $pageSize = UG_FIND_PAGE_SIZE, $username = null, $password = null, $regnum = null)
+    {
+        // Build base URL to local proxy (oou_student_api.php in web root)
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https://' : 'http://';
+        $host   = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
+        $dir    = rtrim(str_replace('\\', '/', dirname($_SERVER['PHP_SELF'])), '/');
+        if ($dir === '') {
+            $dir = '/';
+        }
+        $baseUrl = $scheme . $host . $dir . '/oou_student_api.php';
+
+        $params = array(
+            // Use ALL so the proxy aggregates UG, PG and CCED
+            'type'  => 'ALL',
+            'page'  => (int) $page,
+            'limit' => (int) $pageSize,
+        );
+
+        if (!empty($regnum)) {
+            // Normalise matric/regnum before sending to proxy to avoid case issues
+            $params['regnum'] = strtoupper(trim($regnum));
+        }
+
+        $url = $baseUrl . '?' . http_build_query($params);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, array(
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_HTTPHEADER     => array(
+                'Authorization: my_secure_hospital_key',
+            ),
+        ));
+
+        $response = curl_exec($ch);
+        if ($response === false) {
+            curl_close($ch);
+            return array();
+        }
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+        if (!is_array($data) || !isset($data['status']) || $data['status'] !== 'success' || !isset($data['data']) || !is_array($data['data'])) {
+            return array();
+        }
+
+        // Return only the list portion (normalised array)
+        return $data['data'];
+    }
+
+    // Helper: find a single portal user by ID (matric/staff no) by scanning a range of records
+    // Defaults now controlled by UG_FIND_MAX_PAGES / UG_FIND_PAGE_SIZE
+    function find_ug_student_by_matric($matric, $maxPages = UG_FIND_MAX_PAGES, $pageSize = UG_FIND_PAGE_SIZE)
+    {
+        $matricNorm = strtoupper(trim($matric));
+
+        // First try relying on regnum filter in the proxy (page 1 only)
+        $filtered = fetch_ug_students(1, $pageSize, null, null, $matric);
+        if (!empty($filtered)) {
+            foreach ($filtered as $candidate) {
+                if (!isset($candidate['matric_no'])) {
+                    continue;
+                }
+                if (strtoupper(trim($candidate['matric_no'])) === $matricNorm) {
+                    return $candidate;
+                }
+            }
+        }
+
+        // Fallback: walk through pages until we either find the record or hit the last page
+        for ($page = 1; $page <= $maxPages; $page++) {
+            $students = fetch_ug_students($page, $pageSize);
+
+            if (empty($students)) {
+                // No more data available
+                break;
+            }
+
+            foreach ($students as $candidate) {
+                if (!isset($candidate['matric_no'])) {
+                    continue;
+                }
+
+                if (strtoupper(trim($candidate['matric_no'])) === $matricNorm) {
+                    return $candidate;
+                }
+            }
+
+            // If this page returned fewer than pageSize records, it's the last page
+            if (count($students) < $pageSize) {
+                break;
+            }
+        }
+
+        return null;
+    }
+
+    // Defaults for pre-filled form values (from portal API)
+    $pref_staffno   = '';
+    $pref_title     = '';
+    $pref_surn      = '';
+    $pref_fname     = '';
+    $pref_mname     = '';
+    $pref_dept      = '';
+    $pref_faculty   = '';
+    $pref_dob       = '';
+    $pref_age       = '';
+    $pref_addr      = '';
+    $pref_phone     = '';
+    $pref_nok       = '';
+    $pref_noknumber = '';
+    $pref_gender    = '';
+    $pref_passport  = '';
+
+    // If a staff number is supplied via GET, fetch details from portal
+    $lookup_staffno = isset($_GET['lookup_staffno']) ? trim($_GET['lookup_staffno']) : '';
+    if ($lookup_staffno !== '') {
+        $stu = find_ug_student_by_matric($lookup_staffno, STAFF_FIND_MAX_PAGES, UG_FIND_PAGE_SIZE);
+
+        if ($stu !== null) {
+            $pref_staffno = isset($stu['matric_no']) ? $stu['matric_no'] : $lookup_staffno;
+            $pref_surn    = isset($stu['surname']) ? $stu['surname'] : '';
+            $pref_fname   = isset($stu['first_name']) ? $stu['first_name'] : '';
+            $pref_mname   = isset($stu['middle_name']) ? $stu['middle_name'] : '';
+            $pref_dept    = isset($stu['department']) ? $stu['department'] : '';
+            $pref_faculty = isset($stu['faculty']) ? $stu['faculty'] : '';
+            $pref_addr    = isset($stu['address']) ? $stu['address'] : '';
+            $pref_phone   = isset($stu['phone']) ? $stu['phone'] : '';
+            $pref_nok     = isset($stu['nok']) ? $stu['nok'] : '';
+            $pref_noknumber = isset($stu['nok_phone']) ? $stu['nok_phone'] : '';
+
+            // Passport URL from portal (if provided by API)
+            if (!empty($stu['passport_url'])) {
+                $basePassUrl = trim($stu['passport_url']);
+                $path        = parse_url($basePassUrl, PHP_URL_PATH);
+
+                if ($path && preg_match('/\.(jpg|jpeg|png|gif)$/i', $path)) {
+                    // Already looks like an image
+                    $pref_passport = $basePassUrl;
+                } else {
+                    // Build from matric/regnum e.g. SCI25261200.jpg
+                    $regSource = isset($stu['matric_no']) ? $stu['matric_no'] : (isset($stu['regnum']) ? $stu['regnum'] : $lookup_staffno);
+                    $cleanMat  = preg_replace('/[^A-Z0-9]/i', '', strtoupper($regSource));
+                    $pref_passport = rtrim($basePassUrl, '/') . '/passports/' . $cleanMat . '.jpg';
+                }
+            }
+
+            // Infer title and gender from sex
+            $sex = isset($stu['sex']) ? strtoupper($stu['sex']) : '';
+            if ($sex === 'MALE') {
+                $pref_title  = 'Mr';
+                $pref_gender = 'Male';
+            } elseif ($sex === 'FEMALE') {
+                $pref_title  = 'Miss';
+                $pref_gender = 'Female';
+            }
+
+            // DOB conversion: handle multiple possible formats from the portal API
+            if (!empty($stu['dob'])) {
+                $rawDob  = trim($stu['dob']);
+                $dobObj  = false;
+                $formats = array('d/m/Y', 'd-m-Y', 'Y-m-d');
+
+                foreach ($formats as $fmt) {
+                    $tmp = DateTime::createFromFormat($fmt, $rawDob);
+                    if ($tmp instanceof DateTime) {
+                        $dobObj = $tmp;
+                        break;
+                    }
+                }
+
+                if ($dobObj instanceof DateTime) {
+                    $pref_dob = $dobObj->format('Y-m-d');
+                    $now      = new DateTime();
+                    $diff     = $now->diff($dobObj);
+                    $pref_age = $diff->y;
+                }
+            }
+        } else {
+            $pref_staffno = $lookup_staffno;
+            $err = 'No portal record found for staff number ' . htmlspecialchars($lookup_staffno);
+        }
+    }
+
+    if(isset($_POST['add_patient']))
+    {
 
             $pat_scode=$_POST['pat_scode'];
             $pat_title=$_POST['title'];
@@ -20,17 +225,14 @@
             $pat_phone=$_POST['phone'];
             $nok=$_POST['nok'];
             $noknumber=$_POST['noknumber'];
-			 $mstatus=$_POST['mstatus'];
-			$gender = isset($_POST['gender']) ? $_POST['gender'] : null;
+            $mstatus=$_POST['mstatus'];
+            $gender = isset($_POST['gender']) ? $_POST['gender'] : null;
             $pics=$_FILES["pics"]["name"];
-            
-            
-//$dir="productimages";
-//unlink($dir.'/'.$pimage);
+			
 
+            //move uploaded picture
+            move_uploaded_file($_FILES["pics"]["tmp_name"],"picture/".$_FILES["pics"]["name"]);
 
-                 move_uploaded_file($_FILES["pics"]["tmp_name"],"picture/".$_FILES["pics"]["name"]);
-   
             $query="insert into staff(
             scode,title,surname,firstname,middlename,staff_no,dept,faculty,reg_date,dob,age,gender,address,phone,nok,nok_contact,marital_status,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
             $stmt = $mysqli->prepare($query);
@@ -46,14 +248,11 @@
                 $success = "Staff Registration Successful";
             }
             else {
-            $err = "Please Try Again Or Try Later";
+                $err = "Please Try Again Or Try Later";
             }
-            
-            
-        }
+    }
 
-
-        $ind="S"."4".rand(0,7729); 
+    $ind="S"."4".rand(0,7729); 
 ?>
 <!--End Server Side-->
 <!--End Patient Registration-->
@@ -106,8 +305,31 @@
                             <div class="col-12">
                                 <div class="card">
                                     <div class="card-body">
-                                       
-                                        <!--Add Patient Form-->
+
+                            <?php if(!empty($success)) { ?>
+                                <div class="alert alert-success" role="alert">
+                                    <?php echo htmlspecialchars($success); ?>
+                                </div>
+                            <?php } ?>
+
+                            <?php if(!empty($err)) { ?>
+                                <div class="alert alert-danger" role="alert">
+                                    <?php echo htmlspecialchars($err); ?>
+                                </div>
+                            <?php } ?>
+
+                            <!-- Lookup from portal by staff number -->
+                            <form method="get" action="his_admin_staff_individualcard.php" class="form-inline mb-3">
+                                <div class="form-group col-md-4">
+                                    <label for="lookupStaffno" class="col-form-label">Fetch From OOU Portal (Staff No)</label>
+                                    <input type="text" name="lookup_staffno" id="lookupStaffno" class="form-control" style="color:blue;" value="<?php echo htmlspecialchars($lookup_staffno); ?>" placeholder="Enter Staff No and click Fetch">
+                                </div>
+                                <div class="form-group col-md-2" style="margin-top:32px;">
+                                    <button type="submit" class="btn btn-secondary">Fetch</button>
+                                </div>
+                            </form>
+
+                            <!--Add Patient Form-->
                                         <form method="post" action="<?php $_SERVER['PHP_SELF']; ?>" enctype="multipart/form-data" >
                                              <div class="form-row">
 
@@ -118,7 +340,7 @@
 
                                                 <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label"><h3>Staff Number</h3></label>
-                                                    <input required="required" type="text" style="color:blue;" name="pat_staffno" class="form-control" id="inputCity" placeholder="Staff no">
+                                        <input required="required" type="text" style="color:blue;" name="pat_staffno" class="form-control" id="inputCity" placeholder="Staff no" value="<?php echo htmlspecialchars($pref_staffno); ?>">
                                                 </div>
                                                
                                                 <div class="form-group col-md-4">
@@ -131,44 +353,44 @@
                                                  <div class="form-group col-md-4">
                                                     <label for="inputState" class="col-form-label">Title</label>
                                                     <select id="inputState" required="required" name="title" class="form-control">
-                                                        <option>Choose</option>
-                                                         <option value="Mr">Mr</option>
-                                                        <option value="Miss">Miss</option>
-                                                        <option value="Mrs">Mrs</option>
-                                                        <option value="Mrs">Dr</option>
-                                                        <option value="Mrs">Prof</option>
+                                                        <option value="">Choose</option>
+                                                        <option value="Mr" <?php if($pref_title=='Mr') echo 'selected'; ?>>Mr</option>
+                                                        <option value="Miss" <?php if($pref_title=='Miss') echo 'selected'; ?>>Miss</option>
+                                                        <option value="Mrs" <?php if($pref_title=='Mrs') echo 'selected'; ?>>Mrs</option>
+                                                        <option value="Dr">Dr</option>
+                                                        <option value="Prof">Prof</option>
                                                     </select>
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputEmail4" class="col-form-label">Surname</label>
-                                                    <input type="text" required="required" name="surn" class="form-control" id="inputEmail4" placeholder="Patient's Surname">
+                                                    <input type="text" required="required" name="surn" class="form-control" id="inputEmail4" placeholder="Patient's Surname" value="<?php echo htmlspecialchars($pref_surn); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputEmail4" class="col-form-label">First Name</label>
-                                                    <input type="text" required="required" name="fname" class="form-control" id="inputEmail4" placeholder="Patient's First Name">
+                                                    <input type="text" required="required" name="fname" class="form-control" id="inputEmail4" placeholder="Patient's First Name" value="<?php echo htmlspecialchars($pref_fname); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputPassword4" class="col-form-label">Middle Name</label>
-                                                    <input required="required" type="text" name="mname" class="form-control"  id="inputPassword4" placeholder="Patient`s Middle Name">
+                                                    <input required="required" type="text" name="mname" class="form-control"  id="inputPassword4" placeholder="Patient`s Middle Name" value="<?php echo htmlspecialchars($pref_mname); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputPassword4" class="col-form-label">Department</label>
-                                                    <input required="required" type="text" name="dept" class="form-control"  id="inputPassword4" placeholder="Department">
+                                                    <input required="required" type="text" name="dept" class="form-control"  id="inputPassword4" placeholder="Department" value="<?php echo htmlspecialchars($pref_dept); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputPassword4" class="col-form-label">Faculty</label>
-                                                    <input required="required" type="text" name="faculty" class="form-control"  id="inputPassword4" placeholder="Faculty">
+                                                    <input required="required" type="text" name="faculty" class="form-control"  id="inputPassword4" placeholder="Faculty" value="<?php echo htmlspecialchars($pref_faculty); ?>">
                                                 </div>
                                             </div>
 
                                             <div class="form-row">
                                                 <div class="form-group col-md-6">
                                                     <label for="inputEmail4" class="col-form-label">Date Of Birth</label>
-                                                    <input type="date" required="required" name="dob" class="form-control" id="inputEmail4" placeholder="DD/MM/YYYY">
+                                                    <input type="date" required="required" name="dob" class="form-control" id="inputEmail4" placeholder="DD/MM/YYYY" value="<?php echo htmlspecialchars($pref_dob); ?>">
                                                 </div>
                                                 <div class="form-group col-md-6">
                                                     <label for="inputPassword4" class="col-form-label">Age</label>
-                                                    <input required="required" type="text" name="age" class="form-control"  id="inputPassword4" placeholder="Patient`s Age">
+                                                    <input required="required" type="text" name="age" class="form-control"  id="inputPassword4" placeholder="Patient`s Age" value="<?php echo htmlspecialchars($pref_age); ?>">
                                                 </div>
                                             </div>
 
@@ -177,29 +399,29 @@
                                                     <label for="staff_gender" class="col-form-label">Gender</label>
                                                     <select id="staff_gender" name="gender" class="form-control" required="required">
                                                         <option value="">Choose</option>
-                                                        <option value="Male">Male</option>
-                                                        <option value="Female">Female</option>
+                                                        <option value="Male" <?php if($pref_gender=='Male') echo 'selected'; ?>>Male</option>
+                                                        <option value="Female" <?php if($pref_gender=='Female') echo 'selected'; ?>>Female</option>
                                                     </select>
                                                 </div>
                                             </div>
 
                                             <div class="form-group">
                                                 <label for="inputAddress" class="col-form-label">Address</label>
-                                                <input required="required" type="text" class="form-control" name="add" id="inputAddress" placeholder="Patient's Addresss">
+                                                <input required="required" type="text" class="form-control" name="add" id="inputAddress" placeholder="Patient's Addresss" value="<?php echo htmlspecialchars($pref_addr); ?>">
                                             </div>
 
                                             <div class="form-row">
                                                 <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label">Mobile Number</label>
-                                                    <input required="required" type="text" name="phone" class="form-control" id="inputCity">
+                                                    <input required="required" type="text" name="phone" class="form-control" id="inputCity" value="<?php echo htmlspecialchars($pref_phone); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label">Patient NOK</label>
-                                                    <input required="required" type="text" name="nok" class="form-control" id="inputCity">
+                                                    <input required="required" type="text" name="nok" class="form-control" id="inputCity" value="<?php echo htmlspecialchars($pref_nok); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label">NOK Mobile Number</label>
-                                                    <input required="required" type="text" name="noknumber" class="form-control" id="inputCity">
+                                                    <input required="required" type="text" name="noknumber" class="form-control" id="inputCity" value="<?php echo htmlspecialchars($pref_noknumber); ?>">
                                                 </div>
 
                                                 <div class="form-group col-md-4">
@@ -220,7 +442,7 @@
                                                         <div class="col-md-4">
                                                          <div class="form-group">
                                                                 <label for="inputState" class="col-form-label">Uploaded Picture</label>
-                                                               <img alt="" class=" img-thumbnail pull-right" id="hpass" src="#" width="300" height="220"  />                                                            </div>
+                                                   <img alt="" class=" img-thumbnail pull-right" id="hpass" src="<?php echo !empty($pref_passport) ? htmlspecialchars($pref_passport) : '#'; ?>" width="300" height="220"  />                                                            </div>
                                                 </div>
                                                 <div class="col-md-4">
                                                          <div class="form-group">
