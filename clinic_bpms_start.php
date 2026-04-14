@@ -22,41 +22,23 @@ if ($amount <= 0) {
     exit;
 }
 
-// Handover directly to the central BPMS payment-invoice endpoint
-// on the payments server. The remote script is responsible for
-// generating any invoice/transaction records as needed.
-$bpmsUrl = 'https://payments.oouagoiwoye.edu.ng/payment-invoice.php';
+// Mark the session so that payment-invoice.php (on this same server)
+// knows it was initiated from the clinic bridge.
+$_SESSION['bpms_from_clinic'] = true;
 
-// Build simple query parameters with the information we have.
-$params = array();
-
-// These parameter names may or may not be used by the BPMS portal,
-// but including them is harmless and lets the BPMS team wire them up
-// later if desired.
-$params['src']    = 'clinic';
-$params['amount'] = $amount;
-if ($customer !== '') {
-    $params['name'] = $customer;
-}
-if ($patientCode !== '') {
-    $params['regnum'] = $patientCode;
-}
-if ($trackid !== '') {
-    $params['trackid'] = $trackid;
-}
-if ($teller !== '') {
-    $params['ref'] = $teller;
-}
-
-$query   = http_build_query($params);
-$fullUrl = $bpmsUrl . '?' . $query;
+// Redirect to the LOCAL payment-invoice.php on THIS server so the
+// PHP session is preserved (cross-domain redirects lose the session).
+$scheme  = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+$host    = $_SERVER['HTTP_HOST'];
+$dir     = rtrim(dirname($_SERVER['REQUEST_URI']), '/');
+$localUrl = $scheme . '://' . $host . $dir . '/payment-invoice.php';
 
 // Debug mode: when ?debug=1 is present, show the URL instead of redirecting.
 if (isset($_GET['debug']) && $_GET['debug'] == '1') {
     header('Content-Type: text/plain; charset=utf-8');
-    echo "BPMS redirect URL:\n" . $fullUrl;
+    echo "Local payment-invoice URL:\n" . $localUrl;
     exit;
 }
 
-header('Location: ' . $fullUrl);
+header('Location: ' . $localUrl);
 exit;
