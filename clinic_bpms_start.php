@@ -22,35 +22,19 @@ if ($amount <= 0) {
     exit;
 }
 
-// Redirect to the central BPMS payment-invoice endpoint on the payments server.
-// Pass all details as GET params since PHP sessions are not shared cross-domain.
-$bpmsUrl = 'https://payments.oouagoiwoye.edu.ng/payment-invoice.php';
-
-$params = array();
-$params['src']    = 'clinic';
-$params['amount'] = $amount;
-if ($customer !== '') {
-    $params['name'] = $customer;
-}
-if ($patientCode !== '') {
-    $params['regnum'] = $patientCode;
-}
-if ($trackid !== '') {
-    $params['trackid'] = $trackid;
-}
-if ($teller !== '') {
-    $params['ref'] = $teller;
-}
-
-$query   = http_build_query($params);
-$fullUrl = $bpmsUrl . '?' . $query;
+// Redirect to the self-contained local payment form on this server.
+// Session is preserved since we stay on the same domain.
+$scheme   = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+$host     = $_SERVER['HTTP_HOST'];
+$dir      = rtrim(dirname($_SERVER['REQUEST_URI']), '/');
+$localUrl = $scheme . '://' . $host . $dir . '/clinic_payment_form.php';
 
 // Debug mode: when ?debug=1 is present, show the URL instead of redirecting.
 if (isset($_GET['debug']) && $_GET['debug'] == '1') {
     header('Content-Type: text/plain; charset=utf-8');
-    echo "BPMS redirect URL:\n" . $fullUrl;
+    echo "Payment form URL:\n" . $localUrl;
     exit;
 }
 
-header('Location: ' . $fullUrl);
+header('Location: ' . $localUrl);
 exit;
