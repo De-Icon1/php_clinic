@@ -22,9 +22,9 @@ if ($amount <= 0) {
     exit;
 }
 
-// Base BPMS entry URL (no local BPMS DB connection required).
-// The BPMS team has moved away from new-transaction.php;
-// use the payment-invoice endpoint as the single entry point.
+// Handover directly to the central BPMS payment-invoice endpoint
+// on the payments server. The remote script is responsible for
+// generating any invoice/transaction records as needed.
 $bpmsUrl = 'https://payments.oouagoiwoye.edu.ng/payment-invoice.php';
 
 // Build simple query parameters with the information we have.
@@ -50,16 +50,6 @@ if ($teller !== '') {
 
 $query   = http_build_query($params);
 $fullUrl = $bpmsUrl . '?' . $query;
-
-// Clear one-time clinic context keys so they are not reused accidentally.
-unset(
-    $_SESSION['bpms_type'],
-    $_SESSION['bpms_amount'],
-    $_SESSION['bpms_customer'],
-    $_SESSION['bpms_patient_code'],
-    $_SESSION['bpms_trackid'],
-    $_SESSION['bpms_teller']
-);
 
 // Debug mode: when ?debug=1 is present, show the URL instead of redirecting.
 if (isset($_GET['debug']) && $_GET['debug'] == '1') {

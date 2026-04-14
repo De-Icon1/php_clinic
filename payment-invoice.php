@@ -13,86 +13,139 @@ include("dbconfig.php");
 require_once'../bpms/bpms-dbconnect.php';
 require_once '../bpms/bpms-functions.php';
 include 'num2word.php';
-if (isset($_SESSION['invid'])){
-	$transid = $_SESSION['invid'];
-} else if ($_GET['id'])
-	
-{
-	$transid = $bpms->quote(trim($_GET['id']));
-}
 
-$trans_search = $bpms->query("SELECT * FROM transactions WHERE transid = '$transid'");
-		//echo 'AFTER QUERY';
-	if (!$trans_search)
-	{
-		die($bpms->errorInfo().' CHK_VAL_RPT_FAILD');
-	}
-	//echo ' numb is '.$trans_search->rowCount();
-	if ($trans_search->rowCount() == 1)
-		{
-			?>
-			<script language="javascript">
-alert("INVOICE PREVIOUSLY GENERATED\NGO BACK TO HOME PAGE TO GENERATE A NEW INVOICE OR TRACK STATUS OF PREVIOUS PAYMENT");
-				document.location = 'bpms-report.php?request_id=<?php echo $transid?>&mode=track'
+// Detect when we are being called from the HMS clinic bridge
+// instead of the traditional student portal invoice flow.
+// Support both session-based (same-server) and GET-param-based (cross-domain) access.
+$fromClinicSession = isset($_SESSION['bpms_from_clinic']) && isset($_SESSION['bpms_amount']);
+$fromClinicGet     = isset($_GET['src']) && $_GET['src'] === 'clinic'
+                     && isset($_GET['amount']) && (float)$_GET['amount'] > 0;
+$fromClinic = $fromClinicSession || $fromClinicGet;
+
+if ($fromClinic) {
+  // Prefer GET params (cross-domain redirect); fall back to session (same-server).
+  if ($fromClinicGet) {
+    $type        = isset($_GET['type']) ? trim($_GET['type']) : 'CLINIC';
+    $amount      = (float) $_GET['amount'];
+    $patientCode = isset($_GET['regnum']) ? trim($_GET['regnum']) : '';
+    $customer    = isset($_GET['name'])   ? trim($_GET['name'])   : '';
+  } else {
+    $type        = isset($_SESSION['bpms_type']) ? $_SESSION['bpms_type'] : 'CLINIC';
+    $amount      = (float) $_SESSION['bpms_amount'];
+    $patientCode = isset($_SESSION['bpms_patient_code']) ? trim($_SESSION['bpms_patient_code']) : '';
+    $customer    = isset($_SESSION['bpms_customer']) ? trim($_SESSION['bpms_customer']) : '';
+  }
+
+  // Generate a fresh transaction id via BPMS helper.
+  $transid = generateTransId(10);
+
+  // Split customer name into surname/first/middle where possible.
+  $nameParts = preg_split('/\s+/', $customer);
+  $sname = isset($nameParts[0]) && $nameParts[0] !== '' ? strtoupper($nameParts[0]) : 'CLINIC';
+  $fname = isset($nameParts[1]) ? ucwords(strtolower($nameParts[1])) : '';
+  $mname = isset($nameParts[2]) ? ucwords(strtolower($nameParts[2])) : '';
+
+  $regnum = $patientCode !== '' ? $patientCode : 'NA';
+  $email  = '';
+  $tel    = '';
+
+  // Generic academic/session fields required by BPMS helpers.
+  $session = date('Y') . '/' . (date('Y') + 1);
+  $level   = 0;
+  $prog    = 'CLINIC';
+
+  // Map HMS payment type to a revenue code and head description.
+  $revcode = ($type === 'pharmacy') ? 'HMSPHARM' : 'HMSCLINIC';
+  $head    = ($type === 'pharmacy') ? 'Hospital Pharmacy Payment' : 'Hospital Clinic Payment';
+  $remarks = 'Hospital Management System payment';
+
+  $inv = array(
+    'regnum'  => $regnum,
+    'email'   => $email,
+    'tel'     => $tel,
+    'session' => $session,
+    'level'   => $level,
+    'prog'    => $prog,
+    'revcode' => $revcode,
+    'head'    => $head,
+    'remarks' => $remarks,
+    'sname'   => $sname,
+    'fname'   => $fname,
+    'mname'   => $mname,
+    'amount'  => $amount,
+  );
+
+  $title = "#" . $transid . " HMS PAYMENT PROFILE";
+} else {
+  // Original student-portal-style invoice loading
+  if (isset($_SESSION['invid'])){
+    $transid = $_SESSION['invid'];
+  } elseif (isset($_GET['id']) && $_GET['id'] !== '') {
+    $transid = $bpms->quote(trim($_GET['id']));
+  } else {
+    $transid = '';
+  }
+
+  $trans_search = $bpms->query("SELECT * FROM transactions WHERE transid = '$transid'");
+  if (!$trans_search)
+  {
+    die($bpms->errorInfo().' CHK_VAL_RPT_FAILD');
+  }
+  if ($trans_search->rowCount() == 1)
+  {
+    ?>
+    <script language="javascript">
+alert("INVOICE PREVIOUSLY GENERATED\nGO BACK TO HOME PAGE TO GENERATE A NEW INVOICE OR TRACK STATUS OF PREVIOUS PAYMENT");
+      document.location = 'bpms-report.php?request_id=<?php echo $transid?>&mode=track'
 				
 </script>
-			<?php
-			
-		}
+    <?php
+  }
 
-$q = $pydb->query("select * from invoices where transid = '$transid'");
+  $q = $pydb->query("select * from invoices where transid = '$transid'");
+  if (!$q)
+  {
+    die($pydb->errorInfo().' INV_DLD_DLDE');
+  }
 
-    
-  
-if (!$q)
-{
-	die($pydb->errorInfo().' INV_DLD_DLDE');
-}
-
-if ($q->rowCount() > 0)
-{
-	$inv = $q->fetch(PDO::FETCH_ASSOC);
-	
-	/*$rq = $pydb->query("select * from revenues where sn = '{$inv['purpose']}'");
-	if (!$rq)
-	{
-		die($pydb->errorInfo().'chk_rev_r');
-	}*/
-		
-} else {
-	?>
+  if ($q->rowCount() > 0)
+  {
+    $inv = $q->fetch(PDO::FETCH_ASSOC);
+    /*$rq = $pydb->query("select * from revenues where sn = '{$inv['purpose']}'");
+    if (!$rq)
+    {
+      die($pydb->errorInfo().'chk_rev_r');
+    }*/
+  }
+  else
+  {
+    ?>
 <script language="javascript">
 alert("SORRY TRANSACTION <?php echo $transid ?> WAS NOT FOUND");
-	document.location = document.referrer;
+  document.location = document.referrer;
 </script>
-	<?php
-		exit;
+    <?php
+    exit;
+  }
+
+  $title = "#". $transid." INVOICE PAYMENT PROFILE";
+
+  if (empty($inv['regnum']))
+  {
+    $regnum = 'NA';
+  }
+  else
+  {
+    $regnum = $inv['regnum'];
+  }
+  $email   = $inv['email'];
+  $tel     = $inv['tel'];
+  $session = $inv['session'];
+  $level   = $inv['level'];
+  $prog    = $inv['prog'];
+  $revcode = $inv['revcode'];
+  $amount  = isset($inv['amount']) ? $inv['amount'] : 0;
 }
-$title = "#". $transid." INVOICE PAYMENT PROFILE";
-//$title = "STUDENTS: Payment Invoice";
-//$page = "payhistory";
-//$pagetitle = "Students";
-
-//include("../head.php");
-
-if (empty($inv['regnum']))
-{
-	$regnum = 'NA';
-} else {
-	$regnum = $inv['regnum'];
-}
-	$email = $inv['email'];
-
-	$tel = $inv['tel'];
-
-
-
-	$session = $inv['session'];
-	$level = $inv['level'];
-
-
-
-
 
 
 
@@ -176,6 +229,20 @@ if ($details == 'FAILED')
 					   document.location = document.referrer; </script>
       <?php
 				 exit;
+}
+
+// If this invoice was initiated from the HMS clinic bridge,
+// clear the temporary session context so it is not reused.
+if ($fromClinic) {
+  unset(
+    $_SESSION['bpms_from_clinic'],
+    $_SESSION['bpms_type'],
+    $_SESSION['bpms_amount'],
+    $_SESSION['bpms_customer'],
+    $_SESSION['bpms_patient_code'],
+    $_SESSION['bpms_trackid'],
+    $_SESSION['bpms_teller']
+  );
 }
 		// echo $details['prn'];
 		 $body = '<table width="800px" border="0" cellpadding="5" cellspacing="5"  background="images/oou.png" align="center" class="tabl">
