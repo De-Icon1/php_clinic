@@ -22,23 +22,35 @@ if ($amount <= 0) {
     exit;
 }
 
-// Mark the session so that payment-invoice.php (on this same server)
-// knows it was initiated from the clinic bridge.
-$_SESSION['bpms_from_clinic'] = true;
+// Redirect to the central BPMS payment-invoice endpoint on the payments server.
+// Pass all details as GET params since PHP sessions are not shared cross-domain.
+$bpmsUrl = 'https://payments.oouagoiwoye.edu.ng/payment-invoice.php';
 
-// Redirect to the LOCAL payment-invoice.php on THIS server so the
-// PHP session is preserved (cross-domain redirects lose the session).
-$scheme  = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
-$host    = $_SERVER['HTTP_HOST'];
-$dir     = rtrim(dirname($_SERVER['REQUEST_URI']), '/');
-$localUrl = $scheme . '://' . $host . $dir . '/payment-invoice.php';
+$params = array();
+$params['src']    = 'clinic';
+$params['amount'] = $amount;
+if ($customer !== '') {
+    $params['name'] = $customer;
+}
+if ($patientCode !== '') {
+    $params['regnum'] = $patientCode;
+}
+if ($trackid !== '') {
+    $params['trackid'] = $trackid;
+}
+if ($teller !== '') {
+    $params['ref'] = $teller;
+}
+
+$query   = http_build_query($params);
+$fullUrl = $bpmsUrl . '?' . $query;
 
 // Debug mode: when ?debug=1 is present, show the URL instead of redirecting.
 if (isset($_GET['debug']) && $_GET['debug'] == '1') {
     header('Content-Type: text/plain; charset=utf-8');
-    echo "Local payment-invoice URL:\n" . $localUrl;
+    echo "BPMS redirect URL:\n" . $fullUrl;
     exit;
 }
 
-header('Location: ' . $localUrl);
+header('Location: ' . $fullUrl);
 exit;
