@@ -38,6 +38,20 @@ $level    = 0;
 $email    = 'clinic@oouagoiwoye.edu.ng'; // placeholder – ticrms requires non-empty
 $tel      = '08000000000';               // placeholder – ticrms requires 11 digits
 
+// If cashier left the name blank, look it up from his_patients using the patient code
+if (trim($customer) === '' && $patientCode !== '') {
+    $np = $mysqli->prepare("SELECT pat_fname, pat_lname FROM his_patients WHERE pat_number = ? LIMIT 1");
+    if ($np) {
+        $np->bind_param('s', $patientCode);
+        $np->execute();
+        $nr = $np->get_result()->fetch_assoc();
+        if ($nr) {
+            $customer = trim($nr['pat_lname'] . ' ' . $nr['pat_fname']);
+        }
+        $np->close();
+    }
+}
+
 // Split customer into name parts
 // Format expected: "SURNAME FIRSTNAME MIDDLENAME" or just a full name string
 $nameParts = preg_split('/\s+/', trim($customer));
