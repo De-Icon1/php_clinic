@@ -22,8 +22,10 @@ if ($amount <= 0) {
     exit;
 }
 
-// Base BPMS entry URL (no local DB connection required).
-$bpmsUrl = 'https://payments.oouagoiwoye.edu.ng/new-transaction.php';
+// Base BPMS entry URL (no local BPMS DB connection required).
+// The BPMS team has moved away from new-transaction.php;
+// use the payment-invoice endpoint as the single entry point.
+$bpmsUrl = 'https://payments.oouagoiwoye.edu.ng/payment-invoice.php';
 
 // Build simple query parameters with the information we have.
 $params = array();
@@ -46,10 +48,25 @@ if ($teller !== '') {
     $params['ref'] = $teller;
 }
 
-$query = http_build_query($params);
+$query   = http_build_query($params);
+$fullUrl = $bpmsUrl . '?' . $query;
 
 // Clear one-time clinic context keys so they are not reused accidentally.
-unset($_SESSION['bpms_type'], $_SESSION['bpms_amount'], $_SESSION['bpms_customer'], $_SESSION['bpms_patient_code'], $_SESSION['bpms_trackid'], $_SESSION['bpms_teller']);
+unset(
+    $_SESSION['bpms_type'],
+    $_SESSION['bpms_amount'],
+    $_SESSION['bpms_customer'],
+    $_SESSION['bpms_patient_code'],
+    $_SESSION['bpms_trackid'],
+    $_SESSION['bpms_teller']
+);
 
-header('Location: ' . $bpmsUrl . '?' . $query);
+// Debug mode: when ?debug=1 is present, show the URL instead of redirecting.
+if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "BPMS redirect URL:\n" . $fullUrl;
+    exit;
+}
+
+header('Location: ' . $fullUrl);
 exit;
