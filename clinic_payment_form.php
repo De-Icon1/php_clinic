@@ -39,10 +39,12 @@ $email    = 'clinic@oouagoiwoye.edu.ng'; // placeholder – ticrms requires non-
 $tel      = '08000000000';               // placeholder – ticrms requires 11 digits
 
 // Split customer into name parts
-$nameParts = preg_split('/\s+/', $customer);
-$sname = isset($nameParts[0]) && $nameParts[0] !== '' ? strtoupper($nameParts[0])        : 'CLINIC';
-$fname = isset($nameParts[1])                         ? ucwords(strtolower($nameParts[1])): '';
-$mname = isset($nameParts[2])                         ? ucwords(strtolower($nameParts[2])): '';
+// Format expected: "SURNAME FIRSTNAME MIDDLENAME" or just a full name string
+$nameParts = preg_split('/\s+/', trim($customer));
+$nameParts = array_values(array_filter($nameParts)); // remove empty elements
+$sname = isset($nameParts[0]) ? strtoupper($nameParts[0])        : 'CLINIC';
+$fname = isset($nameParts[1]) ? ucwords(strtolower($nameParts[1])): $sname; // fallback to surname if only one word
+$mname = isset($nameParts[2]) ? ucwords(strtolower($nameParts[2])): '';
 $fullName = trim($sname . ' ' . $fname . ' ' . $mname);
 
 // ── Generate a unique transaction ID ─────────────────────────────────────
@@ -58,7 +60,7 @@ $hash_string = "request_id={$transid}"
     . "&customer_email={$email}"
     . "&customer_phone={$tel}"
     . "&customer_first_name={$fname}"
-    . "&customer_first_name={$sname}"
+    . "&customer_last_name={$sname}"
     . "&public-key={$public_key}";
 $hash = hash_hmac($hash_type, $hash_string, $privateKey);
 
