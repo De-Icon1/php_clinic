@@ -53,10 +53,6 @@ if (trim($customer) === '' && $patientCode !== '') {
         $np->close();
     }
 }
-        }
-        $np->close();
-    }
-}
 if (trim($customer) === '' && $patientCode !== '') {
     $np = $mysqli->prepare("SELECT pat_fname, pat_lname, pat_phone FROM his_patients WHERE pat_number = ? LIMIT 1");
     if ($np) {
