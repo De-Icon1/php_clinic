@@ -35,55 +35,62 @@ $revcode  = ($type === 'pharmacy') ? 'HMSPHARM' : 'HMSCLINIC';
 $head     = ($type === 'pharmacy') ? 'Hospital Pharmacy Payment' : 'Hospital Clinic Payment';
 $session  = date('Y') . '/' . (date('Y') + 1);
 $level    = 0;
-$email    = 'clinic@oouagoiwoye.edu.ng'; // placeholder – ticrms requires non-empty
-$tel      = '08000000000';               // placeholder – ticrms requires 11 digits
+$email    = '';               // will be looked up or entered by cashier
+$tel      = '08000000000';    // placeholder – ticrms requires 11 digits
 
 // If cashier left the name blank, look it up from the DB using the patient code
+// Try his_docs (staff) first, then his_patients, regardless of code prefix
 if (trim($customer) === '' && $patientCode !== '') {
-    $codeUpper = strtoupper($patientCode);
-    if (strpos($codeUpper, 'ST') === 0) {
-        // Student – look up in his_patients
-        $np = $mysqli->prepare("SELECT pat_fname, pat_lname FROM his_patients WHERE pat_number = ? LIMIT 1");
-        if ($np) {
-            $np->bind_param('s', $patientCode);
-            $np->execute();
-            $nr = $np->get_result()->fetch_assoc();
-            if ($nr) { $customer = trim($nr['pat_lname'] . ' ' . $nr['pat_fname']); }
-            $np->close();
+    $np = $mysqli->prepare("SELECT doc_fname, doc_lname, doc_email FROM his_docs WHERE doc_number = ? LIMIT 1");
+    if ($np) {
+        $np->bind_param('s', $patientCode);
+        $np->execute();
+        $nr = $np->get_result()->fetch_assoc();
+        if ($nr && trim($nr['doc_fname'] . $nr['doc_lname']) !== '') {
+            $customer = trim($nr['doc_lname'] . ' ' . $nr['doc_fname']);
+            if (!empty($nr['doc_email'])) { $email = $nr['doc_email']; }
         }
-    } elseif (strpos($codeUpper, 'S') === 0) {
-        // Staff – look up in his_docs
-        $np = $mysqli->prepare("SELECT doc_fname, doc_lname FROM his_docs WHERE doc_number = ? LIMIT 1");
-        if ($np) {
-            $np->bind_param('s', $patientCode);
-            $np->execute();
-            $nr = $np->get_result()->fetch_assoc();
-            if ($nr) { $customer = trim($nr['doc_lname'] . ' ' . $nr['doc_fname']); }
-            $np->close();
-        }
-    } else {
-        // Individual / other – try his_patients first then his_docs
-        $np = $mysqli->prepare("SELECT pat_fname, pat_lname FROM his_patients WHERE pat_number = ? LIMIT 1");
-        if ($np) {
-            $np->bind_param('s', $patientCode);
-            $np->execute();
-            $nr = $np->get_result()->fetch_assoc();
-            if ($nr) { $customer = trim($nr['pat_lname'] . ' ' . $nr['pat_fname']); }
-            $np->close();
-        }
+        $np->close();
     }
-    // Last resort: use the patient code itself as the display name
-    if (trim($customer) === '') { $customer = $patientCode; }
+}
+        }
+        $np->close();
+    }
+}
+if (trim($customer) === '' && $patientCode !== '') {
+    $np = $mysqli->prepare("SELECT pat_fname, pat_lname, pat_phone FROM his_patients WHERE pat_number = ? LIMIT 1");
+    if ($np) {
+        $np->bind_param('s', $patientCode);
+        $np->execute();
+        $nr = $np->get_result()->fetch_assoc();
+        if ($nr && trim($nr['pat_fname'] . $nr['pat_lname']) !== '') {
+            $customer = trim($nr['pat_lname'] . ' ' . $nr['pat_fname']);
+            if (!empty($nr['pat_phone'])) { $tel = $nr['pat_phone']; }
+        }
+        $np->close();
+    }
 }
 
-// Split customer into name parts
-// Format expected: "SURNAME FIRSTNAME MIDDLENAME" or just a full name string
-$nameParts = preg_split('/\s+/', trim($customer));
-$nameParts = array_values(array_filter($nameParts)); // remove empty elements
-$sname = isset($nameParts[0]) ? strtoupper($nameParts[0])        : 'CLINIC';
-$fname = isset($nameParts[1]) ? ucwords(strtolower($nameParts[1])): $sname; // fallback to surname if only one word
-$mname = isset($nameParts[2]) ? ucwords(strtolower($nameParts[2])): '';
-$fullName = trim($sname . ' ' . $fname . ' ' . $mname);
+// Also fetch email/phone for staff if customer was already set (name typed by cashier)
+if ($email === '' && $patientCode !== '') {
+    $np = $mysqli->prepare("SELECT doc_email FROM his_docs WHERE doc_number = ? LIMIT 1");
+    if ($np) {
+        $np->bind_param('s', $patientCode);
+        $np->execute();
+        $nr = $np->get_result()->fetch_assoc();
+        if ($nr && !empty($nr['doc_email'])) { $email = $nr['doc_email']; }
+        $np->close();
+    }
+}
+
+// Split customer into name parts: "SURNAME FIRSTNAME MIDDLENAME"
+$nameParts = array_values(array_filter(preg_split('/\s+/', trim($customer))));
+$sname    = isset($nameParts[0]) ? strtoupper($nameParts[0])         : 'PATIENT';
+$fname    = isset($nameParts[1]) ? ucwords(strtolower($nameParts[1])) : '';
+$mname    = isset($nameParts[2]) ? ucwords(strtolower($nameParts[2])) : '';
+$fullName = trim($customer) !== '' ? trim($customer) : $patientCode; // use original string for display
+// Gateway requires customer_first_name to be non-empty
+$gatewayFname = $fname !== '' ? $fname : $sname;
 
 // ── Generate a unique transaction ID ─────────────────────────────────────
 $transid = 'CLINIC' . date('YmdHis') . mt_rand(10, 99);
@@ -97,7 +104,7 @@ $hash_string = "request_id={$transid}"
     . "&callback_url={$callback_url}"
     . "&customer_email={$email}"
     . "&customer_phone={$tel}"
-    . "&customer_first_name={$fname}"
+    . "&customer_first_name={$gatewayFname}"
     . "&customer_last_name={$sname}"
     . "&public-key={$public_key}";
 $hash = hash_hmac($hash_type, $hash_string, $privateKey);
@@ -174,7 +181,15 @@ unset(
   <div class="no-print" style="margin-top:20px;">
     <button onclick="window.print()" class="btn btn-info btn-pay">Print Invoice</button>
 
-    <form method="post" action="<?php echo htmlspecialchars($paymentGateway); ?>" style="margin-top:10px;">
+    <form method="post" id="gatewayForm" action="<?php echo htmlspecialchars($paymentGateway); ?>" style="margin-top:10px;">
+      <?php if ($email === ''): ?>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label style="font-weight:bold;">Patient Email <span style="color:red">*</span></label>
+        <input type="email" id="emailInput" class="form-control" placeholder="Enter patient email address" required
+               style="margin-bottom:5px;"/>
+      </div>
+      <?php endif; ?>
+      <input type="hidden" name="customer_email" id="emailHidden" value="<?php echo htmlspecialchars($email); ?>"/>
       <input type="hidden" name="billed_amount"       value="<?php echo htmlspecialchars($amount); ?>"/>
       <input type="hidden" name="name"                value="<?php echo htmlspecialchars($fullName); ?>"/>
       <input type="hidden" name="school_code"         value="<?php echo htmlspecialchars($merchant_id); ?>"/>
@@ -182,7 +197,7 @@ unset(
       <input type="hidden" name="bill_description"    value="<?php echo htmlspecialchars($bill_desc); ?>"/>
       <input type="hidden" name="customer_phone"      value="<?php echo htmlspecialchars($tel); ?>"/>
       <input type="hidden" name="customer_id"         value="<?php echo htmlspecialchars($regnum); ?>"/>
-      <input type="hidden" name="customer_first_name" value="<?php echo htmlspecialchars($fname); ?>"/>
+      <input type="hidden" name="customer_first_name" value="<?php echo htmlspecialchars($gatewayFname); ?>"/>
       <input type="hidden" name="customer_last_name"  value="<?php echo htmlspecialchars($sname); ?>"/>
       <input type="hidden" name="customer_address"    value="NAN"/>
       <input type="hidden" name="customer_fname"      value="<?php echo htmlspecialchars($fname); ?>"/>
@@ -192,12 +207,22 @@ unset(
       <input type="hidden" name="currency"            value="<?php echo htmlspecialchars($currency); ?>"/>
       <input type="hidden" name="callback_url"        value="<?php echo htmlspecialchars($callback_url); ?>"/>
       <input type="hidden" name="product-desc"        value="<?php echo htmlspecialchars($product_desc); ?>"/>
-      <input type="hidden" name="customer_email"      value="<?php echo htmlspecialchars($email); ?>"/>
       <input type="hidden" name="hash_type"           value="<?php echo htmlspecialchars($hash_type); ?>"/>
       <input type="hidden" name="hash"                value="<?php echo htmlspecialchars($hash); ?>"/>
       <button type="submit" class="btn btn-success btn-pay">PROCEED TO WEB PAYMENT GATEWAY</button>
     </form>
   </div>
 </div>
+<script>
+document.getElementById('gatewayForm').addEventListener('submit', function(e) {
+  var inp = document.getElementById('emailInput');
+  var hid = document.getElementById('emailHidden');
+  if (inp && hid) {
+    var val = inp.value.trim();
+    if (val === '') { e.preventDefault(); alert('Please enter the patient email address.'); return; }
+    hid.value = val;
+  }
+});
+</script>
 </body>
 </html>
