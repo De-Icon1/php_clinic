@@ -79,8 +79,10 @@ if ($email === '' && $patientCode !== '') {
     }
 }
 
-// Flag: name was not resolved from DB (still looks like a raw patient code)
-$nameUnresolved = (trim($customer) === '' || trim($customer) === $patientCode);
+// Flag: name was not resolved from DB
+// Consider unresolved if empty, or if it's still just the raw patient code (no spaces = not a real name)
+$customerTrimmed = trim($customer);
+$nameUnresolved = ($customerTrimmed === '' || $customerTrimmed === trim($patientCode));
 // Flag: phone is still the placeholder
 $phoneUnresolved = ($tel === '08000000000');
 
