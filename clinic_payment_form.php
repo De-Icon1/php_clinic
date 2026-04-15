@@ -79,6 +79,11 @@ if ($email === '' && $patientCode !== '') {
     }
 }
 
+// Flag: name was not resolved from DB (still looks like a raw patient code)
+$nameUnresolved = (trim($customer) === '' || trim($customer) === $patientCode);
+// Flag: phone is still the placeholder
+$phoneUnresolved = ($tel === '08000000000');
+
 // Split customer into name parts: "SURNAME FIRSTNAME MIDDLENAME"
 $nameParts = array_values(array_filter(preg_split('/\s+/', trim($customer))));
 $sname    = isset($nameParts[0]) ? strtoupper($nameParts[0])         : 'PATIENT';
@@ -167,7 +172,8 @@ unset(
   <table>
     <tr><th>Transaction ID</th><td><?php echo htmlspecialchars($transid); ?></td></tr>
     <tr><th>Patient ID / Reg. No</th><td><?php echo htmlspecialchars($regnum); ?></td></tr>
-    <tr><th>Patient Name</th><td><?php echo htmlspecialchars($fullName); ?></td></tr>
+    <tr><th>Patient Name</th><td><?php echo $nameUnresolved ? '<span style="color:#aaa">— enter below —</span>' : htmlspecialchars($fullName); ?></td></tr>
+    <tr><th>Phone</th><td><?php echo $phoneUnresolved ? '<span style="color:#aaa">— enter below —</span>' : htmlspecialchars($tel); ?></td></tr>
     <tr><th>Payment Type</th><td><?php echo htmlspecialchars($head); ?></td></tr>
     <tr><th>Revenue Code</th><td><?php echo htmlspecialchars($revcode); ?></td></tr>
     <tr><th>Session</th><td><?php echo htmlspecialchars($session); ?></td></tr>
@@ -178,23 +184,34 @@ unset(
     <button onclick="window.print()" class="btn btn-info btn-pay">Print Invoice</button>
 
     <form method="post" id="gatewayForm" action="<?php echo htmlspecialchars($paymentGateway); ?>" style="margin-top:10px;">
+      <?php if ($nameUnresolved): ?>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label style="font-weight:bold;">Patient Full Name <span style="color:red">*</span></label>
+        <input type="text" id="nameInput" class="form-control" placeholder="Enter patient full name e.g. ADEYEMI John" required style="margin-bottom:5px;"/>
+      </div>
+      <?php endif; ?>
+      <input type="hidden" name="name"         id="nameHidden"  value="<?php echo htmlspecialchars($fullName); ?>"/>
+      <input type="hidden" name="customer_first_name" id="fnameHidden" value="<?php echo htmlspecialchars($gatewayFname); ?>"/>
+      <input type="hidden" name="customer_last_name"  id="lnameHidden" value="<?php echo htmlspecialchars($sname); ?>"/>
       <?php if ($email === ''): ?>
       <div class="form-group" style="margin-bottom:10px;">
         <label style="font-weight:bold;">Patient Email <span style="color:red">*</span></label>
-        <input type="email" id="emailInput" class="form-control" placeholder="Enter patient email address" required
-               style="margin-bottom:5px;"/>
+        <input type="email" id="emailInput" class="form-control" placeholder="Enter patient email address" required style="margin-bottom:5px;"/>
       </div>
-      <?php endif; ?>
+      <?php endif ?>
+      <?php if ($phoneUnresolved): ?>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label style="font-weight:bold;">Patient Phone <span style="color:red">*</span></label>
+        <input type="tel" id="phoneInput" class="form-control" placeholder="Enter 11-digit phone e.g. 08012345678" required style="margin-bottom:5px;"/>
+      </div>
+      <?php endif ?>
       <input type="hidden" name="customer_email" id="emailHidden" value="<?php echo htmlspecialchars($email); ?>"/>
+      <input type="hidden" name="customer_phone" id="phoneHidden" value="<?php echo htmlspecialchars($tel); ?>"/>
       <input type="hidden" name="billed_amount"       value="<?php echo htmlspecialchars($amount); ?>"/>
-      <input type="hidden" name="name"                value="<?php echo htmlspecialchars($fullName); ?>"/>
       <input type="hidden" name="school_code"         value="<?php echo htmlspecialchars($merchant_id); ?>"/>
       <input type="hidden" name="date"                value="<?php echo htmlspecialchars($regdate); ?>"/>
-      <input type="hidden" name="bill_description"    value="<?php echo htmlspecialchars($bill_desc); ?>"/>
-      <input type="hidden" name="customer_phone"      value="<?php echo htmlspecialchars($tel); ?>"/>
+      <input type="hidden" name="bill_description"    id="billDescHidden" value="<?php echo htmlspecialchars($bill_desc); ?>"/>
       <input type="hidden" name="customer_id"         value="<?php echo htmlspecialchars($regnum); ?>"/>
-      <input type="hidden" name="customer_first_name" value="<?php echo htmlspecialchars($gatewayFname); ?>"/>
-      <input type="hidden" name="customer_last_name"  value="<?php echo htmlspecialchars($sname); ?>"/>
       <input type="hidden" name="customer_address"    value="NAN"/>
       <input type="hidden" name="customer_fname"      value="<?php echo htmlspecialchars($fname); ?>"/>
       <input type="hidden" name="public_key"          value="<?php echo htmlspecialchars($public_key); ?>"/>
@@ -211,12 +228,33 @@ unset(
 </div>
 <script>
 document.getElementById('gatewayForm').addEventListener('submit', function(e) {
-  var inp = document.getElementById('emailInput');
-  var hid = document.getElementById('emailHidden');
-  if (inp && hid) {
-    var val = inp.value.trim();
-    if (val === '') { e.preventDefault(); alert('Please enter the patient email address.'); return; }
-    hid.value = val;
+  // Handle name input
+  var nameInp = document.getElementById('nameInput');
+  if (nameInp) {
+    var nameVal = nameInp.value.trim();
+    if (nameVal === '') { e.preventDefault(); alert('Please enter the patient full name.'); return; }
+    document.getElementById('nameHidden').value  = nameVal;
+    document.getElementById('billDescHidden').value = document.getElementById('billDescHidden').value.replace(/^[^|]*/, nameVal);
+    // Split into first/last for gateway
+    var parts = nameVal.split(/\s+/);
+    document.getElementById('lnameHidden').value = parts[0].toUpperCase();
+    document.getElementById('fnameHidden').value = parts.length > 1 ? parts[1] : parts[0];
+  }
+  // Handle phone input
+  var phoneInp = document.getElementById('phoneInput');
+  var phoneHid = document.getElementById('phoneHidden');
+  if (phoneInp && phoneHid) {
+    var phoneVal = phoneInp.value.trim();
+    if (phoneVal === '') { e.preventDefault(); alert('Please enter the patient phone number.'); return; }
+    phoneHid.value = phoneVal;
+  }
+  // Handle email input
+  var emailInp = document.getElementById('emailInput');
+  var emailHid = document.getElementById('emailHidden');
+  if (emailInp && emailHid) {
+    var emailVal = emailInp.value.trim();
+    if (emailVal === '') { e.preventDefault(); alert('Please enter the patient email address.'); return; }
+    emailHid.value = emailVal;
   }
 });
 </script>
