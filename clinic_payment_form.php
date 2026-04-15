@@ -38,18 +38,42 @@ $level    = 0;
 $email    = 'clinic@oouagoiwoye.edu.ng'; // placeholder – ticrms requires non-empty
 $tel      = '08000000000';               // placeholder – ticrms requires 11 digits
 
-// If cashier left the name blank, look it up from his_patients using the patient code
+// If cashier left the name blank, look it up from the DB using the patient code
 if (trim($customer) === '' && $patientCode !== '') {
-    $np = $mysqli->prepare("SELECT pat_fname, pat_lname FROM his_patients WHERE pat_number = ? LIMIT 1");
-    if ($np) {
-        $np->bind_param('s', $patientCode);
-        $np->execute();
-        $nr = $np->get_result()->fetch_assoc();
-        if ($nr) {
-            $customer = trim($nr['pat_lname'] . ' ' . $nr['pat_fname']);
+    $codeUpper = strtoupper($patientCode);
+    if (strpos($codeUpper, 'ST') === 0) {
+        // Student – look up in his_patients
+        $np = $mysqli->prepare("SELECT pat_fname, pat_lname FROM his_patients WHERE pat_number = ? LIMIT 1");
+        if ($np) {
+            $np->bind_param('s', $patientCode);
+            $np->execute();
+            $nr = $np->get_result()->fetch_assoc();
+            if ($nr) { $customer = trim($nr['pat_lname'] . ' ' . $nr['pat_fname']); }
+            $np->close();
         }
-        $np->close();
+    } elseif (strpos($codeUpper, 'S') === 0) {
+        // Staff – look up in his_docs
+        $np = $mysqli->prepare("SELECT doc_fname, doc_lname FROM his_docs WHERE doc_number = ? LIMIT 1");
+        if ($np) {
+            $np->bind_param('s', $patientCode);
+            $np->execute();
+            $nr = $np->get_result()->fetch_assoc();
+            if ($nr) { $customer = trim($nr['doc_lname'] . ' ' . $nr['doc_fname']); }
+            $np->close();
+        }
+    } else {
+        // Individual / other – try his_patients first then his_docs
+        $np = $mysqli->prepare("SELECT pat_fname, pat_lname FROM his_patients WHERE pat_number = ? LIMIT 1");
+        if ($np) {
+            $np->bind_param('s', $patientCode);
+            $np->execute();
+            $nr = $np->get_result()->fetch_assoc();
+            if ($nr) { $customer = trim($nr['pat_lname'] . ' ' . $nr['pat_fname']); }
+            $np->close();
+        }
     }
+    // Last resort: use the patient code itself as the display name
+    if (trim($customer) === '') { $customer = $patientCode; }
 }
 
 // Split customer into name parts
