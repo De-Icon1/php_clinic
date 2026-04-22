@@ -73,7 +73,7 @@
                                                     $stmt->close();
                                                 ?>
                                                 <h3 class="text-dark mt-1"><span data-plugin="counterup"><?php echo $outpatient;?></span></h3>
-                                                <p class="text-muted mb-1 text-truncate">Individual Patients</p>
+                                                <p class="text-muted mb-1 text-truncate">Non Staff Patients</p>
                                             </div>
                                         </div>
                                     </div> <!-- end row-->
