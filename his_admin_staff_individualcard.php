@@ -120,6 +120,46 @@
         return null;
     }
 
+    // Helper: find a staff member by staff number AND surname (both must match).
+    // Fetches using the regnum/staffno filter then verifies the surname.
+    function find_staff_by_staffno_and_surname($staffno, $surname, $maxPages = STAFF_FIND_MAX_PAGES, $pageSize = UG_FIND_PAGE_SIZE)
+    {
+        $staffnoNorm = strtoupper(trim($staffno));
+        $surnameNorm = strtoupper(trim($surname));
+
+        // First pass: try filtered fetch by staff number then match surname
+        $filtered = fetch_ug_students(1, $pageSize, null, null, $staffno);
+        if (!empty($filtered)) {
+            foreach ($filtered as $candidate) {
+                $candStaffno = strtoupper(trim(isset($candidate['matric_no']) ? $candidate['matric_no'] : ''));
+                $candSurname = strtoupper(trim(isset($candidate['surname']) ? $candidate['surname'] : ''));
+                if ($candStaffno === $staffnoNorm && $candSurname === $surnameNorm) {
+                    return $candidate;
+                }
+            }
+        }
+
+        // Fallback: walk pages matching both staff no and surname
+        for ($page = 1; $page <= $maxPages; $page++) {
+            $records = fetch_ug_students($page, $pageSize);
+            if (empty($records)) {
+                break;
+            }
+            foreach ($records as $candidate) {
+                $candStaffno = strtoupper(trim(isset($candidate['matric_no']) ? $candidate['matric_no'] : ''));
+                $candSurname = strtoupper(trim(isset($candidate['surname']) ? $candidate['surname'] : ''));
+                if ($candStaffno === $staffnoNorm && $candSurname === $surnameNorm) {
+                    return $candidate;
+                }
+            }
+            if (count($records) < $pageSize) {
+                break;
+            }
+        }
+
+        return null;
+    }
+
     // Defaults for pre-filled form values (from portal API)
     $pref_staffno   = '';
     $pref_title     = '';
@@ -137,10 +177,11 @@
     $pref_gender    = '';
     $pref_passport  = '';
 
-    // If a staff number is supplied via GET, fetch details from portal
-    $lookup_staffno = isset($_GET['lookup_staffno']) ? trim($_GET['lookup_staffno']) : '';
-    if ($lookup_staffno !== '') {
-        $stu = find_ug_student_by_matric($lookup_staffno, STAFF_FIND_MAX_PAGES, UG_FIND_PAGE_SIZE);
+    // If a staff number AND surname are supplied via GET, fetch details from portal
+    $lookup_staffno  = isset($_GET['lookup_staffno'])  ? trim($_GET['lookup_staffno'])  : '';
+    $lookup_surname  = isset($_GET['lookup_surname'])  ? trim($_GET['lookup_surname'])  : '';
+    if ($lookup_staffno !== '' && $lookup_surname !== '') {
+        $stu = find_staff_by_staffno_and_surname($lookup_staffno, $lookup_surname);
 
         if ($stu !== null) {
             $pref_staffno = isset($stu['matric_no']) ? $stu['matric_no'] : $lookup_staffno;
@@ -203,8 +244,10 @@
             }
         } else {
             $pref_staffno = $lookup_staffno;
-            $err = 'No portal record found for staff number ' . htmlspecialchars($lookup_staffno);
+            $err = 'No portal record found for staff number <strong>' . htmlspecialchars($lookup_staffno) . '</strong> with surname <strong>' . htmlspecialchars($lookup_surname) . '</strong>. Please check the details and try again.';
         }
+    } elseif ($lookup_staffno !== '' || $lookup_surname !== '') {
+        $err = 'Please enter both Staff Number and Surname to fetch from the portal.';
     }
 
     if(isset($_POST['add_patient']))
@@ -318,14 +361,18 @@
                                 </div>
                             <?php } ?>
 
-                            <!-- Lookup from portal by staff number -->
+                            <!-- Lookup from portal by staff number and surname -->
                             <form method="get" action="his_admin_staff_individualcard.php" class="form-inline mb-3">
                                 <div class="form-group col-md-4">
-                                    <label for="lookupStaffno" class="col-form-label">Fetch From OOU Portal (Staff No)</label>
-                                    <input type="text" name="lookup_staffno" id="lookupStaffno" class="form-control" style="color:blue;" value="<?php echo htmlspecialchars($lookup_staffno); ?>" placeholder="Enter Staff No and click Fetch">
+                                    <label for="lookupStaffno" class="col-form-label">Staff No</label>
+                                    <input type="text" name="lookup_staffno" id="lookupStaffno" class="form-control" style="color:blue;" value="<?php echo htmlspecialchars($lookup_staffno); ?>" placeholder="Enter Staff Number">
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label for="lookupSurname" class="col-form-label">Surname</label>
+                                    <input type="text" name="lookup_surname" id="lookupSurname" class="form-control" style="color:blue;" value="<?php echo htmlspecialchars($lookup_surname); ?>" placeholder="Enter Surname">
                                 </div>
                                 <div class="form-group col-md-2" style="margin-top:32px;">
-                                    <button type="submit" class="btn btn-secondary">Fetch</button>
+                                    <button type="submit" class="btn btn-secondary">Fetch From OOU Portal</button>
                                 </div>
                             </form>
 
