@@ -242,8 +242,13 @@
             }
         } else {
             $pref_staffno = $lookup_staffno;
-            $err = 'No portal record found for &ldquo;' . htmlspecialchars($lookup_staffno) . '&rdquo;. Please check the staff number or surname and try again.';
+            $err = 'No portal record found for "' . htmlspecialchars($lookup_staffno) . '". Please check the staff number or surname and try again.';
         }
+    }
+
+    // Defensive compatibility: normalize any legacy two-field validation text.
+    if (!empty($err) && stripos($err, 'both Staff Number and Surname') !== false) {
+        $err = 'Please enter a Staff Number or Surname to fetch from the portal.';
     }
 
     if(isset($_POST['add_patient']))
