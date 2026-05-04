@@ -51,37 +51,61 @@ elseif (strpos($ind, 'A') !== false) {
       $pic=$rows->picture;
 }else{}
 
-		if(isset($_POST['post_result']))
-		{
-			$name = $_POST['name'];
+        if(isset($_POST['post_result']))
+        {
+            $name = $_POST['name'];
             $date = $_POST['datet'];
             $tests = $_POST['test'];
-			$result = $_POST['result'];
+            $result = trim($_POST['result']);
             $st='';
 
-			$query="Update patient_lab set result=? where code=? and test=? and result=?";
-			$stmt = $mysqli->prepare($query);
-			$rc=$stmt->bind_param('ssss',$result, $ind, $tests, $st);
-			$stmt->execute();
+            // ensure upload dir exists
+            $upload_dir = __DIR__ . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'lab_results' . DIRECTORY_SEPARATOR;
+            if(!is_dir($upload_dir)){
+                mkdir($upload_dir, 0755, true);
+            }
 
-                    
+            // add result_file column if not exists (safe upgrade)
+            $colCheck = $mysqli->query("SHOW COLUMNS FROM patient_lab LIKE 'result_file'");
+            if($colCheck && $colCheck->num_rows == 0){
+                $mysqli->query("ALTER TABLE patient_lab ADD result_file VARCHAR(255) NULL") ;
+            }
 
-			/*
-			*Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
-			*echo"<script>alert('Successfully Created Account Proceed To Log In ');</script>";
-			*/ 
-			//declare a varible which will be passed to alert function
-			if($stmt)
-			{
-				$success = "Patient Result Posted Successfully";
-                header("location: lab_resultlist.php");
-			}
-			else {
-				$err = "Please Try Again Or Try Later";
-			}
-			
-			
-		}
+            // require a file to be uploaded by lab technologist before posting
+            $uploaded_filename = '';
+            if(isset($_FILES['result_file']) && isset($_FILES['result_file']['tmp_name']) && $_FILES['result_file']['tmp_name'] != ''){
+                if($_FILES['result_file']['error'] === 0){
+                    $safe_name = time().'_'.preg_replace('/[^A-Za-z0-9._-]/','_',basename($_FILES['result_file']['name']));
+                    $target = $upload_dir . $safe_name;
+                    if(move_uploaded_file($_FILES['result_file']['tmp_name'], $target)){
+                        $uploaded_filename = 'uploads/lab_results/' . $safe_name; // store relative path
+                    } else {
+                        $err = "Failed to move uploaded file.";
+                    }
+                } else {
+                    $err = "File upload error.";
+                }
+            } else {
+                $err = "Please upload a result file before posting.";
+            }
+
+            if(empty($err)){
+                $query="Update patient_lab set result=?, result_file=? where code=? and test=? and result=?";
+                $stmt = $mysqli->prepare($query);
+                $rc=$stmt->bind_param('sssss',$result, $uploaded_filename, $ind, $tests, $st);
+                $stmt->execute();
+
+                if($stmt)
+                {
+                    $success = "Patient Result Posted Successfully";
+                    header("location: lab_resultlist.php");
+                    exit;
+                }
+                else {
+                    $err = "Please Try Again Or Try Later";
+                }
+            }
+        }
 ?>
 <!--End Server Side-->
 <!--End Patient Registration-->
@@ -147,8 +171,14 @@ elseif (strpos($ind, 'A') !== false) {
                                     <div class="card">
                                         <div class="card-body">
                                             <h4 class="header-title"></h4>
+                                                <?php if(isset($err)){ ?>
+                                                    <div class="alert alert-danger" role="alert"><?php echo $err;?></div>
+                                                <?php } ?>
+                                                <?php if(isset($success)){ ?>
+                                                    <div class="alert alert-success" role="alert"><?php echo $success;?></div>
+                                                <?php } ?>
                                             <!--Add Patient Form-->
-                                            <form method="post">
+                                            <form method="post" enctype="multipart/form-data">
                                                  <div class="form-group col-md-6">
                                                     <div class="form-group col-md-4" >
                                                   
@@ -197,9 +227,13 @@ elseif (strpos($ind, 'A') !== false) {
                                                     </div>
 
                                                     <div class="form-group col-md-12">
-                                                        <label for="inputPassword4" class="col-form-label">Test Result</label>
-                                                        <textarea class="form-control" id="sname" name="result" rows="9">
-                                                              </textarea>
+                                                        <label for="inputPassword4" class="col-form-label">Test Result Overview (Lab Technologist)</label>
+                                                        <textarea class="form-control" id="sname" name="result" rows="9"></textarea>
+                                                    </div>
+
+                                                    <div class="form-group col-md-6">
+                                                        <label for="resultFile" class="col-form-label">Upload Result File (PDF/Image)</label>
+                                                        <input type="file" class="form-control" id="resultFile" name="result_file" accept="image/*,.pdf">
                                                     </div>
 
                                                     

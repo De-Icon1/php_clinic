@@ -176,7 +176,7 @@ $campusid=$_SESSION['campus_id'];
                                                     
                                                     <td><?php echo $row->test;?></td>
                                                     <td style="color:red;"><?php echo "NO RESULT"; ?></td>
-                                                    <td><a href="lab_result.php?pat_number=<?php echo $row->code;?>&test=<?php echo $row->test;?>" class="badge badge-success"><i class="far fa-eye "></i>Result</a></td>
+                                                    <td><a href="lab_result.php?pat_number=<?php echo $row->code;?>&test=<?php echo $row->test;?>" class="badge badge-primary"><i class="fas fa-upload "></i> Upload Result</a></td>
 
                                                    
                                                 </tr>
