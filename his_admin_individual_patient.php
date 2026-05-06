@@ -12,6 +12,7 @@
 			$pat_mname=$_POST['mname'];
 			$pat_dob=$_POST['dob'];
             $pat_phone=$_POST['phone'];
+            $pat_email = isset($_POST['email']) ? $_POST['email'] : '';
             $pat_addr=$_POST['add'];
             $pat_age = $_POST['age'];
             $nok=$_POST['nok'];
@@ -26,9 +27,9 @@
 
                  move_uploaded_file($_FILES["pics"]["tmp_name"],"picture/".$_FILES["pics"]["name"]);
    
-            $query="insert into individual(surname,firstname,middlename,code,reg_date,dob,age,gender,address,phone,nok,nok_contact,marrital,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            $query="insert into individual(surname,firstname,middlename,code,reg_date,dob,age,gender,address,phone,email,nok,nok_contact,marrital,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
             $stmt = $mysqli->prepare($query);
-            $rc=$stmt->bind_param('ssssssssssssssss',$pat_surn,$pat_fname, $pat_mname,$pat_code,$date, $pat_dob, $pat_age,$gender, $pat_addr,$pat_phone, $nok, $noknumber,$mstatus,$pics);
+            $rc=$stmt->bind_param('ssssssssssssssss',$pat_surn,$pat_fname, $pat_mname,$pat_code,$date, $pat_dob, $pat_age,$gender, $pat_addr,$pat_phone, $pat_email, $nok, $noknumber,$mstatus,$pics);
 			$stmt->execute();
 			/*
 			*Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
@@ -163,6 +164,10 @@
                                                     <input required="required" type="text" name="phone" class="form-control" id="inputCity">
                                                 </div>
                                                 <div class="form-group col-md-4">
+                                                    <label for="inputEmail" class="col-form-label">Email</label>
+                                                    <input type="email" name="email" class="form-control" id="inputEmail" placeholder="example@mail.com">
+                                                </div>
+                                                <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label">Patient NOK</label>
                                                     <input required="required" type="text" name="nok" class="form-control" id="inputCity">
                                                 </div>
@@ -254,6 +259,7 @@
                                                 <th data-hide="phone" style="color:white;">MStatus</th>
                                                 <th data-hide="phone" style="color:white;">DOB</th>
                                                 <th data-hide="phone" style="color:white;">Phone</th>
+                                                <th data-hide="phone" style="color:white;">Email</th>
                                                 <th data-hide="phone" style="color:white;">Address</th>
                                                 <th data-hide="phone" style="color:white;">Action</th>
                                             </tr>
@@ -281,7 +287,7 @@
                                                     <td><?php echo $row->middlename;?></td>
                                                     <td><?php echo $row->marital;?></td>
                                                     <td><?php echo $row->reg_date;?> </td>
-                                                    <td><?php echo $row->phone;?></td>
+                                                    <td><?php echo isset($row->email) ? $row->email : '';?></td>
                                                     <td><?php echo $row->address;?></td>
 
                                                     <td><a href="his_admin_family_individualcard.php?code=<?php echo $row->code;?>" class="badge badge-success"><i class="far fa-eye "></i> View</a></td>

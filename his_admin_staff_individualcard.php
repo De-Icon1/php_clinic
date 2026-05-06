@@ -171,6 +171,7 @@
     $pref_age       = '';
     $pref_addr      = '';
     $pref_phone     = '';
+    $pref_email     = '';
     $pref_nok       = '';
     $pref_noknumber = '';
     $pref_gender    = '';
@@ -192,6 +193,7 @@
             $pref_phone   = isset($stu['phone']) ? $stu['phone'] : '';
             $pref_nok     = isset($stu['nok']) ? $stu['nok'] : '';
             $pref_noknumber = isset($stu['nok_phone']) ? $stu['nok_phone'] : '';
+            $pref_email = isset($stu['email']) ? $stu['email'] : '';
 
             // Passport URL from portal (if provided by API)
             if (!empty($stu['passport_url'])) {
@@ -267,6 +269,7 @@
             $pat_age = $_POST['age'];
             $pat_addr=$_POST['add'];
             $pat_phone=$_POST['phone'];
+            $pat_email = isset($_POST['email']) ? $_POST['email'] : '';
             $nok=$_POST['nok'];
             $noknumber=$_POST['noknumber'];
             $mstatus=$_POST['mstatus'];
@@ -278,9 +281,9 @@
             move_uploaded_file($_FILES["pics"]["tmp_name"],"picture/".$_FILES["pics"]["name"]);
 
             $query="insert into staff(
-            scode,title,surname,firstname,middlename,staff_no,dept,faculty,reg_date,dob,age,gender,address,phone,nok,nok_contact,marital_status,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            scode,title,surname,firstname,middlename,staff_no,dept,faculty,reg_date,dob,age,gender,address,phone,email,nok,nok_contact,marital_status,picture) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
             $stmt = $mysqli->prepare($query);
-            $rc=$stmt->bind_param('ssssssssssssssssss',$pat_scode, $pat_title,  $pat_surn, $pat_fname,  $pat_lname, $pat_staffno, $pat_dept, $pat_faculty, $date, $pat_dob, $pat_age,$gender, $pat_addr, $pat_phone, $nok, $noknumber, $mstatus, $pics);
+            $rc=$stmt->bind_param('sssssssssssssssssss',$pat_scode, $pat_title,  $pat_surn, $pat_fname,  $pat_lname, $pat_staffno, $pat_dept, $pat_faculty, $date, $pat_dob, $pat_age,$gender, $pat_addr, $pat_phone, $pat_email, $nok, $noknumber, $mstatus, $pics);
             $stmt->execute();
             /*
             *Use Sweet Alerts Instead Of This Fucked Up Javascript Alerts
@@ -460,6 +463,10 @@
                                                     <input required="required" type="text" name="phone" class="form-control" id="inputCity" value="<?php echo htmlspecialchars($pref_phone); ?>">
                                                 </div>
                                                 <div class="form-group col-md-4">
+                                                    <label for="inputEmail" class="col-form-label">Email</label>
+                                                    <input type="email" name="email" class="form-control" id="inputEmail" placeholder="example@mail.com" value="<?php echo htmlspecialchars($pref_email); ?>">
+                                                </div>
+                                                <div class="form-group col-md-4">
                                                     <label for="inputCity" class="col-form-label">Patient NOK</label>
                                                     <input required="required" type="text" name="nok" class="form-control" id="inputCity" value="<?php echo htmlspecialchars($pref_nok); ?>">
                                                 </div>
@@ -555,6 +562,7 @@
                                                 <th data-hide="phone" style="color:white;">MStatus</th>
                                                 <th data-hide="phone" style="color:white;">DOB</th>
                                                 <th data-hide="phone" style="color:white;">Phone</th>
+                                                <th data-hide="phone" style="color:white;">Email</th>
                                                 <th data-hide="phone" style="color:white;">Address</th>
                                                 <th data-hide="phone" style="color:white;">Action</th>
                                             </tr>
@@ -589,6 +597,7 @@
                                                     <td><?php echo $row->marital_status;?></td>
                                                     <td><?php echo $row->reg_date;?></td>
                                                     <td><?php echo $row->phone;?> </td>
+                                                    <td><?php echo isset($row->email) ? $row->email : '';?></td>
                                                     <td><?php echo $row->address;?></td>
                                                    
                                                     <td><a href="his_admin_staff_individual.php?code=<?php echo $row->scode;?>" class="badge badge-success"><i class="far fa-eye "></i> View</a></td>
